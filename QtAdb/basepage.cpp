@@ -1,5 +1,7 @@
 #include "basepage.h"
 #include "ui_basepage.h"
+#include "qssloader.h"
+#include "textexplainer.h"
 
 basePage::basePage(QWidget *parent) :
     animationWidget(parent),
@@ -7,18 +9,12 @@ basePage::basePage(QWidget *parent) :
 {
     ui->setupUi(this);
     SPManager = new sonPageManager;
-    animation_listHide = new QPropertyAnimation(ui->listWidget,"geometry");
-    parents = parent;
+    // 第三个参数是 parent：原实现省略了它，动画没有父对象 ——
+    // 页面销毁时不会随之释放，每建一次页面就泄漏一个（LSan 的栈就指向这一行）。
+    animation_listHide = new QPropertyAnimation(ui->listWidget, "geometry", this);
 
-    lastPage = NULL;
     sonPage = NULL;
-    /*
-    QGraphicsDropShadowEffect *shadowEffect = new QGraphicsDropShadowEffect();
-    shadowEffect->setOffset(0,0);
-    shadowEffect->setColor(Qt::gray);
-    shadowEffect->setBlurRadius(10);*/
 
-    //ui->listWidget->setGraphicsEffect(shadowEffect);
 /*******原来的
     ui->listWidget->setStyleSheet("QListWidget{background-color:rgba(255,255,255,0);border-width:1px;border-radius:4px;outline:0px;}"
                                   "QListView::item:hover {"
@@ -48,64 +44,25 @@ basePage::basePage(QWidget *parent) :
                                   "}"
                                   "QListView::item{height:70px;border: 0px solid #BDBDBD;border-radius:4px;margin:6px 0px 0px 6px;}"
                                   );
-    /*
-     *
-                                "QListWidget::item{background-color:rgba(255,255,255,0.9);border-color:rgba(255,255,255,0.9);border-width:0px;border-radius:4px;margin:4px 0px 0px 0px;}"
-                                "QListWidget::item:hover{background-color:rgba(255,255,255,0.7);}"
-                                "QListWidget::item::selected{background-color:rgba(255,255,255,0.5);color:black;}"
-     * */
     ui->listWidget->setViewMode(QListView::ListMode);
     ui->listWidget->setFlow(QListView::TopToBottom);
     ui->listWidget->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOn);
-    //ui->listWidget->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOn);
     ui->listWidget->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
 
-    QFile file("://qss/scrollbar.qss");
-    file.open(QFile::ReadOnly);
-    ui->listWidget->verticalScrollBar()->setStyleSheet(file.readAll());
-    //QScroller::grabGesture(ui->listWidget,QScroller::LeftMouseButtonGesture);
+    // 读取失败时给出警告并跳过（原实现不检查 QFile::open 的返回值）
+    applyScrollBarStyle(ui->listWidget);
 
-    /*
-    view->setViewMode(QListView::ListMode);
-    view->setFlow(QListView::TopToBottom);
-    view->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    view->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    view->setHorizontalScrollMode(QListWidget::ScrollPerPixel);
-    QScroller::grabGesture(view,QScroller::LeftMouseButtonGesture);
-    */
 
     connect(ui->listWidget,SIGNAL(currentRowChanged(int)),this,SLOT(slot_createSonPage(int)));
-    /*透明度动画
-    exitOpacity = new QGraphicsOpacityEffect (this);//创建QGraphicsOpacityEffect对象关联控件ui.widgetProcess
-    exitOpacity->setOpacity(1);//设置透明度为0，隐藏控件
-    this->setGraphicsEffect(exitOpacity);//控件添加绘图效果*/
 
 }
 
 basePage::~basePage()
 {
-    qDebug() << "basepagepos = " << this->pos();
-    //sleep(1000);
-    //qDebug() << "~basePage" << "\n";
-/*
-    if(sonPage != NULL)
-        sonPage->~basePage();*/
 
-    //qDebug() << "~basePage deleted" << "\n";
     delete SPManager;
     delete ui;
-    //qDebug() << "~basePage com" << "\n";
 }
-/*
-void basePage::playExitAnimation()
-{
-    QPropertyAnimation *animation = new QPropertyAnimation(this,"windowOpacity");
-    animation->setDuration(1000);
-    animation->setStartValue(0);
-    animation->setEndValue(1);
-    animation->start();
-}
-*/
 void basePage::addItemsToList(pageListItem *itemWidget)
 {
     QListWidgetItem *tmpItem = new QListWidgetItem();
@@ -115,7 +72,6 @@ void basePage::addItemsToList(pageListItem *itemWidget)
 
 void basePage::setFather(QWidget *parent)
 {
-    father = parent;
 }
 
 void basePage::slot_createSonPage(int key)
@@ -131,14 +87,11 @@ void basePage::slot_createSonPage(int key)
         emit creatingSonPage();
 
         ui->listWidget->setCurrentRow(-1);
-        //qDebug() << "dev of basePage = " << dev.addr;
         sonPage = SPManager->selector(this,whoAmI(),key,dev);
         if(sonPage != NULL)
         {
-            //ui->listWidget->setVisible(false);
 
             /**/
-            //sonPage->setVisible(false);
 
 
             animation_listHide->setDuration(300);
@@ -146,27 +99,7 @@ void basePage::slot_createSonPage(int key)
             animation_listHide->setStartValue(ui->listWidget->geometry());
             animation_listHide->setEasingCurve(QEasingCurve::OutQuart);
             animation_listHide->start();
-            //sonPage->playLoadAnimation_sp();
-            //animation->deleteLater();
 
-            /*
-    qDebug() << "wgtHeight = " << wgtHeight;
-    if(parent->width() <= 600)
-    {
-        animation->setEndValue(QRect(301 - 30, 117 - 6 - 11, 600,wgtHeight));
-    }
-    else
-    {
-        animation->setEndValue(QRect(301 - 30, 117 - 6 - 11, parent->width(),wgtHeight));
-    }
-    //animation->setStartValue(QPoint(301 + 50,117));
-    animation->setStartValue(QRect(301 + 50 - 30, 117 - 6 - 11, parent->width()-50,wgtHeight));
-
-    animation->setEasingCurve(QEasingCurve::OutQuart);
-
-    this->show();
-    animation->start();
-            */
             /**/
         }
     }
@@ -204,23 +137,29 @@ void basePage::whoYouAre(QString name)
     myName = name;
 }
 
-void basePage::setEnableValue(int *val)
+
+
+void basePage::enableAllItems()
 {
-    for(int i = 0; i < 20 ; i++)
+    QList<int> val;
+    const int count = ui->listWidget->count();   // 已加入的条目数
+    for(int i = 1; i <= count; ++i)
     {
-        enableVal[i] = val[i];
+        val.append(i);
     }
+    setEnableValue(val);
 }
 
-bool basePage::isEnable(int k)
+void basePage::setEnableValue(const QList<int> &val)
 {
-    //qDebug() << "k=" << k;
-    for(int i = 0; i < 20; i++)
-    {
-        if(enableVal[i] == k + 1)
-            return true;
-    }
-    return false;
+    enableVal = val;
+}
+
+bool basePage::isEnable(int k) const
+{
+    // 原实现是"遍历 20 个槽位找 k+1"，空槽用 0 表示；
+    // 改用 QList 后语义不变（等价于集合查找），也不再需要固定上限。
+    return enableVal.contains(k + 1);
 }
 
 void basePage::setDev(device device)
@@ -246,5 +185,4 @@ void basePage::slot_spgAnimationEnd()
     unlock();
     ui->mainLayout->addWidget(sonPage);
     sonPage->playLoadAnimation_sp(this->height());
-    //sonPage->setVisible(true);
 }

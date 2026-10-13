@@ -5,9 +5,9 @@
 #include <QGraphicsDropShadowEffect>
 #include <QRegularExpressionValidator>
 //#include <QRegularExpressionValidator>
-#include "../../adbprocess.h"
 #include "../../threads/adbthread.h"
 #include "../../animationwidget.h"
+#include "textexplainer.h"
 
 namespace Ui {
 class sp_scales;
@@ -32,10 +32,9 @@ private slots:
     void on_pushButton_window_clicked();
 
 private:
-    Ui::sp_scales *ui;
+    Ui::sp_scales *ui = nullptr;
 
-    adbProcess *process;
-    textExplainer *explainer;
+    textExplainer *explainer = nullptr;
 
     void setShadow(QWidget* wgt);
     void refresh();

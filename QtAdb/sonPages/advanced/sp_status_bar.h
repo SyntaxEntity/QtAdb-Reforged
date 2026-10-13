@@ -3,8 +3,8 @@
 
 #include <QWidget>
 #include <QGraphicsDropShadowEffect>
-#include "../../adbprocess.h"
 #include "../../animationwidget.h"
+#include "textexplainer.h"
 
 namespace Ui {
 class sp_status_bar;
@@ -36,10 +36,9 @@ private slots:
     void on_pushButton_2_clicked();
 
 private:
-    Ui::sp_status_bar *ui;
+    Ui::sp_status_bar *ui = nullptr;
 
-    adbProcess *process;
-    textExplainer *explainer;
+    textExplainer *explainer = nullptr;
 
     void setShadow(QWidget* wgt);
     void refreshBtns();

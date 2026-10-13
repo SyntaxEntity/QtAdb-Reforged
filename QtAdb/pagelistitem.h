@@ -32,7 +32,6 @@ public:
     void setSelectable();
 
     void setStyles();
-    bool isSelectable = false;
 
     //void emitSignal();
 
@@ -40,9 +39,8 @@ private slots:
     void on_copyButton_clicked();
 
 private:
-    Ui::pageListItem *ui;
+    Ui::pageListItem *ui = nullptr;
 
-    QGraphicsDropShadowEffect *shadowEffect_icon;
 
 public slots:
     void slot_setText(QString t, QString p);

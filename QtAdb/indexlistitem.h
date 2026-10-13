@@ -19,7 +19,7 @@ public:
     void setPic(QString qss);
 
 private:
-    Ui::indexListItem *ui;
+    Ui::indexListItem *ui = nullptr;
 };
 
 #endif // INDEXLISTITEM_H

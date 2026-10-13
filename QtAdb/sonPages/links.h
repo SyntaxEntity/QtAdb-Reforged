@@ -18,7 +18,7 @@ public:
     ~links();
 
 private:
-    Ui::links *ui;
+    Ui::links *ui = nullptr;
 
     void setShadow(QWidget* wgt);
 };

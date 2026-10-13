@@ -1,8 +1,10 @@
 #ifndef SONPAGEMANAGER_H
 #define SONPAGEMANAGER_H
 
+#include <QCoreApplication>   // Q_DECLARE_TR_FUNCTIONS / tr()
 #include <QApplication>
-#include "adbprocess.h"
+#include <QHash>
+#include <functional>
 #include "textexplainer.h"
 #include "devInfo/sp_dpichanger.h"
 #include "devInfo/sp_wmsize.h"
@@ -27,12 +29,14 @@
 
 class sonPageManager
 {
+    // 本类不是 QObject，但需要 tr()（Qt 官方推荐做法）
+    Q_DECLARE_TR_FUNCTIONS(sonPageManager)
+
 public:
     sonPageManager();
     ~sonPageManager();
 
-    adbProcess *process;
-    textExplainer *explainer;
+    textExplainer *explainer = nullptr;
 
 
     animationWidget *selector(QWidget *parent, QString parentName, int key , device dev);

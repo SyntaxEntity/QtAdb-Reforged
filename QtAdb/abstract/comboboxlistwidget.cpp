@@ -1,4 +1,7 @@
 #include "comboboxlistwidget.h"
+#include "../devicenames.h"
+#include "qssloader.h"
+#include "textexplainer.h"
 
 
 
@@ -7,41 +10,24 @@ comboboxListWidget::comboboxListWidget(QWidget *parent)
 {
     explainer = new textExplainer();
 
-    nameList[0] = name;
-    nameList[1] = addr;
-    //this->setModelColumn(count);
     this->setResizeMode(QListView::Adjust);
     this->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
 
-    QFile file_qss("://qss/scrollbar.qss");
-    file_qss.open(QFile::ReadOnly);
-    this->verticalScrollBar()->setStyleSheet(file_qss.readAll());
+    // 读取失败时给出警告并跳过（原实现不检查 QFile::open 的返回值）
+    applyScrollBarStyle(this);
     this->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
-/*
-    file = new QFile(":/cfgs/cfg/name.cfg");
-    file->open(QFile::ReadWrite);*/
 }
 
 comboboxListWidget::~comboboxListWidget()
 {
 
+    // explainer 由本类 new，必须由本类释放（否则每次页面重建都泄漏一个）
+    delete explainer;
 }
 
 void comboboxListWidget::setUpList(QList<device> devList, QList<int> off)
 {
-    /*
-    QFile file(":/cfgs/cfg/name.cfg");
-    file.open(QFile::ReadOnly);
-    QString names = file.readAll();
-    names = explainer->get_words_before(explainer->get_words_after(names,"###NAME###"),"###ENDNAME###");
-    QStringList tmpList = names.split("\n");*/
-    //qDebug() << tmpList;
-/*
-    for(int i = 0 ;i < tmpList.size() ; i++)
-    {
-        nameList[0].append(explainer->get_words_after(tmpList[i],":"));
-        nameList[1].append(explainer->get_words_before(tmpList[i],":"));
-    }*/
+    // 原实现这里还有一段读 :/cfgs/cfg/name.cfg 的代码（只读资源，永不成功），已删除。
 
     for (int i = 0 ; i < devList.size() ; i++ )
     {
@@ -51,17 +37,11 @@ void comboboxListWidget::setUpList(QList<device> devList, QList<int> off)
         wgt->setDevModel(devList[i].model);
         wgt->setStat(devList[i].state);
 
-        qDebug() << "nameList[1] (addr)" << nameList[1];
-        qDebug() << "devList[i].addr" << devList[i].addr;
-        if(nameList[1].contains(devList[i].addr))
-        {
-            wgt->setName(nameList[0][nameList[1].indexOf(devList[i].addr)]);
-            //qDebug() << nameList[0][nameList[1].indexOf(devList[i].addr)];
-        }
-        else
-        {
-            wgt->setName(explainer->get_words_after(devList[i].model,":"));
-        }
+        // 设备别名（用户命名，持久化在可写配置目录）。
+        // 注意：这里【不能】再跟一段"否则显示型号名"的回退 —— devItem::setName("")
+        // 本身就会把型号名设成占位提示；原实现残留的 nameList 分支因为 nameList
+        // 永远是空的，会走到 else 把刚设好的别名覆盖成型号名。
+        wgt->setName(DeviceNames::nameFor(devList[i].addr));
 
         QListWidgetItem *item = new QListWidgetItem(this);
 
@@ -70,43 +50,22 @@ void comboboxListWidget::setUpList(QList<device> devList, QList<int> off)
 
         connect(wgt,SIGNAL(addName(QString,QString)),this,SLOT(addName(QString,QString)));
     }
-/*
-    file.close();*/
-    qDebug() << "closed";
-    //file.deleteLater();
 }
 
 void comboboxListWidget::addName(QString addr,QString name)
-{/*
-    addr = explainer->get_words_after(addr, ": ");
-    qDebug() << "addr:" << addr << "name:" << name;
-
-    if(nameList[1].contains(addr))
+{
+    // 原实现整个函数体被注释掉（它想写回只读的 Qt 资源 :/cfgs/cfg/name.cfg，
+    // 那套设计不可能成功），于是"命名"收到即丢弃。这里改为真正持久化。
+    if(addr.isEmpty())
     {
-        nameList[0][nameList[1].indexOf(addr)] = name;
-    }
-    else
-    {
-        nameList[0].append(name);
-        nameList[1].append(addr);
+        return;
     }
 
-    QString text = "###NAME###\n";
-
-    for(int i = 0 ;i < nameList->size() ; i++)
+    // 如实报告写入结果：写入失败时不能显示"已保存"。
+    // 成功时不需要输出（原实现这里有一条 qDebug，已随调试输出一并清理）。
+    if(!DeviceNames::setName(addr, name))
     {
-        text.append(nameList[1][i]).append(":").append(nameList[0][i]).append("\n");
+        qWarning() << tr("设备别名保存失败（配置目录不可写？）:") << addr
+                   << tr("文件:") << DeviceNames::storagePath();
     }
-
-    text.append("###ENDNAME###");
-
-    //file.open(QFile::ReadWrite);
-    //file.close();
-    QFile file(":/cfgs/cfg/name.cfg");
-    file.setPermissions(QFile::WriteUser);
-    file.open(QIODevice::Truncate | QIODevice::WriteOnly);
-    qDebug() << file.isWritable();
-    file.write(text.toUtf8());
-    file.close();
-    file.deleteLater();*/
 }

@@ -1,5 +1,10 @@
 #include "sp_captive_portal.h"
 #include "ui_sp_captive_portal.h"
+#include "adbclient.h"
+#include <QPointer>
+#include "textexplainer.h"
+#include "adbcommands.h"
+#include "uishadow.h"
 
 sp_captive_portal::sp_captive_portal(QWidget *parent) :
     animationWidget(parent),
@@ -8,7 +13,6 @@ sp_captive_portal::sp_captive_portal(QWidget *parent) :
     ui->setupUi(this);
     setParent(parent);
 
-    process = new adbProcess();
     connect(this->ui->back_to_basePage,SIGNAL(clicked()),parent,SLOT(slot_destroySonPage()));
 
     setShadow(ui->label);
@@ -17,10 +21,8 @@ sp_captive_portal::sp_captive_portal(QWidget *parent) :
     setShadow(ui->android_version);
     setShadow(ui->back_to_basePage);
     setShadow(ui->current_server);
-    //setShadow(ui->delete_directly);
     setShadow(ui->restore);
     setShadow(ui->modify);
-    //setShadow(ui->comboBox);
     setShadow(ui->pushButton);
 
     QStringList serverLists;
@@ -44,7 +46,6 @@ sp_captive_portal::sp_captive_portal(QWidget *parent) :
 
 
 
-    //process->run("adb shell settings get secure android_id", dev).simplified();
 }
 
 sp_captive_portal::~sp_captive_portal()
@@ -60,32 +61,47 @@ void sp_captive_portal::setDev(device device)
 
 void sp_captive_portal::setShadow(QWidget* wgt)
 {
-    QGraphicsDropShadowEffect *shadowEffect_widget = new QGraphicsDropShadowEffect(this);
-    shadowEffect_widget->setOffset(0,0);
-    shadowEffect_widget->setColor(Qt::gray);
-    shadowEffect_widget->setBlurRadius(5);
-    wgt->setGraphicsEffect(shadowEffect_widget);
+    applyDropShadow(wgt);
 }
 
 void sp_captive_portal::refresh()
 {
-    ui->android_version->setText(process->run("adb shell getprop ro.build.version.release", dev).simplified());
-    QString ver = ui->android_version->text().simplified().simplified()[0];
-    if(ver.toInt() < 7 && ver.toInt() >= 5)
-    {
-        ui->current_server->setVisible(true);
-        ui->label->setVisible(true);
-        //adb shell settings get global captive_portal_server
-        ui->current_server->setText(process->run("adb shell settings get global captive_portal_server", dev).simplified());
-    }
-    else
-    {
-        ui->current_server->setVisible(false);
-        ui->label->setVisible(false);
-    }
+    // 两次读取存在依赖（先取版本号，再决定是否查询验证服务器），
+    // 原实现是两次同步等待（合计最长 40s 界面无响应）→ 改为嵌套回调。
+    QPointer<sp_captive_portal> self(this);
 
+    AdbClient::instance()->runWithCallback(
+        {"-s", dev.addr, "shell", "getprop", "ro.build.version.release"},
+        [self](int, const QString &version, const QString &) {
+            if(!self) {
+                return;
+            }
+            self->ui->android_version->setText(version.simplified());
 
-    ui->comboBox->setPlaceholderText("服务器未选择");
+            // 取主版本号首位。设备未返回版本号时为空串，
+            // 原实现对空串取 [0] 属越界访问（Qt 6 下为断言/未定义行为）。
+            const QString ver = version.simplified().left(1);
+            const bool needsServerQuery = (ver.toInt() < 7 && ver.toInt() >= 5);
+
+            self->ui->current_server->setVisible(needsServerQuery);
+            self->ui->label->setVisible(needsServerQuery);
+
+            if(!needsServerQuery) {
+                return;
+            }
+
+            //adb shell settings get global captive_portal_server
+            QPointer<sp_captive_portal> nested = self;
+            AdbClient::instance()->runWithCallback(
+                {"-s", nested->dev.addr, "shell", "settings", "get", "global", "captive_portal_server"},
+                [nested](int, const QString &server, const QString &) {
+                    if(nested) {
+                        nested->ui->current_server->setText(server.simplified());
+                    }
+                });
+        });
+
+    ui->comboBox->setPlaceholderText(tr("服务器未选择"));
     ui->comboBox->setCurrentIndex(-1);
 }
 
@@ -93,32 +109,30 @@ void sp_captive_portal::on_modify_clicked()
 {
     if(ui->comboBox->currentIndex() >= 0)
     {
-        QMessageBox::StandardButton result=QMessageBox::question(NULL, "修改","您确定要将验证服务器修改为" + ui->comboBox->currentText() + "吗？");
-        if(result)
+        QMessageBox::StandardButton result=QMessageBox::question(NULL, tr("修改"),tr("您确定要将验证服务器修改为") + ui->comboBox->currentText() + tr("吗？"));
+        if(result == QMessageBox::Yes)
         {
-                QString ver = ui->android_version->text().simplified().simplified()[0];
+                // 必须与 Yes 显式比较：QMessageBox::No == 0x10000 为真值，
+                // 原来的 if(result) 会把“否”当成“是”而执行修改。
+                const QString verText = ui->android_version->text().simplified();
+                const QString ver = verText.left(1);
                 if(ver.toInt() < 7 && ver.toInt() >= 5)
                 {
-                    //adb shell settings put global captive_portal_server
-                    QString cmd = "adb shell settings put global captive_portal_server ";
-                    cmd.append("http://");
-                    cmd.append(ui->comboBox->currentText());
-                    qDebug() << "cmd = " << cmd;
-                    process->run(cmd, dev);
+                    // 命令由 AdbCmd 具名构造，拼错参数位置会直接编译不过
+                    AdbClient::instance()->runForDevice(
+                        dev.addr, AdbCmd::settingsPut("global", "captive_portal_server",
+                                                      "http://" + ui->comboBox->currentText()));
                 }
                 else
                 {
-                    QString cmd_http = "adb shell settings put global captive_portal_http_url ";
-                    cmd_http.append("http://");
-                    cmd_http.append(ui->comboBox->currentText());
-
-                    QString cmd_https = "adb shell settings put global captive_portal_https_url ";
-                    cmd_https.append("https://");
-                    cmd_https.append(ui->comboBox->currentText());
-                    process->run(cmd_http, dev);
-                    process->run(cmd_https,dev);
+                    AdbClient::instance()->runForDevice(
+                        dev.addr, AdbCmd::settingsPut("global", "captive_portal_http_url",
+                                                      "http://" + ui->comboBox->currentText()));
+                    AdbClient::instance()->runForDevice(
+                        dev.addr, AdbCmd::settingsPut("global", "captive_portal_https_url",
+                                                      "https://" + ui->comboBox->currentText()));
                 }
-                QMessageBox::information(NULL, "修改","已修改");
+                QMessageBox::information(NULL, tr("修改"),tr("已修改"));
 
 
             refresh();
@@ -126,31 +140,32 @@ void sp_captive_portal::on_modify_clicked()
     }
     else
     {
-        ui->comboBox->setPlaceholderText("服务器未选择");
+        ui->comboBox->setPlaceholderText(tr("服务器未选择"));
     }
 }
 
 void sp_captive_portal::on_restore_clicked()
 {
-    QMessageBox::StandardButton result=QMessageBox::question(NULL, "重置","您确定要重置吗？");
+    QMessageBox::StandardButton result=QMessageBox::question(NULL, tr("重置"),tr("您确定要重置吗？"));
 
-    if(result)
+    if(result == QMessageBox::Yes)
     {
-        QString ver = ui->android_version->text().simplified().simplified()[0];
+        // 同上：No 为真值，必须显式判断 Yes
+        const QString verText = ui->android_version->text().simplified();
+        const QString ver = verText.left(1);
         if(ver.toInt() < 7 && ver.toInt() >= 5)
         {
-            //adb shell settings put global captive_portal_server
-            QString cmd = "adb shell settings delete global captive_portal_server";
-            process->run(cmd, dev);
+            AdbClient::instance()->runForDevice(
+                dev.addr, AdbCmd::settingsDelete("global", "captive_portal_server"));
         }
         else
         {
-            QString cmd_http = "adb shell settings delete global captive_portal_https_url";
-            QString cmd_https = "adb shell settings delete global captive_portal_http_url";
-            process->run(cmd_http, dev);
-            process->run(cmd_https,dev);
+            AdbClient::instance()->runForDevice(
+                dev.addr, AdbCmd::settingsDelete("global", "captive_portal_https_url"));
+            AdbClient::instance()->runForDevice(
+                dev.addr, AdbCmd::settingsDelete("global", "captive_portal_http_url"));
         }
-        QMessageBox::information(NULL, "重置","已重置");
+        QMessageBox::information(NULL, tr("重置"),tr("已重置"));
         refresh();
     }
 }

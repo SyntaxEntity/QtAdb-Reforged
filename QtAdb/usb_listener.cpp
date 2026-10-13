@@ -1,91 +1,45 @@
 #include "usb_listener.h"
-#include <QApplication>
 #include <QDebug>
 
-#include <typeinfo>
-
-bool usb_listener::nativeEventFilter(const QByteArray &eventType, void *message, long long *result)
+bool usb_listener::nativeEventFilter(const QByteArray &eventType, void *message, qintptr *result)
 {
+#ifdef Q_OS_WIN
+    Q_UNUSED(eventType);
+
     MSG* msg = reinterpret_cast<MSG*>(message);
-    //qDebug() << "msg = " << msg;
-    unsigned int msgType = msg->message;
-    //qDebug() << "msgType = " << msgType;
-    //qDebug() << WM_DEVICECHANGE;
+    const unsigned int msgType = msg->message;
+
     if(msgType == WM_DEVICECHANGE) {
         emit DeviceChangeCbk();
-
-        //qDebug() << "msgType = " << msgType;
-        //qDebug() << "WM_DEVICECHANGE = " << WM_DEVICECHANGE;
-        //qDebug() << "wParam = " << msg->wParam;
-        //qDebug() << "lParam = " << msg->lParam;
-        //qDebug() << "WM_DEVICECHANGE = " << WM_DEVICECHANGE;
-        //qDebug() << "DBT_DEVICEARRIVAL = " << DBT_DEVICEARRIVAL;
-        //qDebug() << "DBT_DEVICEREMOVECOMPLETE = " << DBT_DEVICEREMOVECOMPLETE;
-/*
-        PDEV_BROADCAST_HDR lpdb = PDEV_BROADCAST_HDR(msg->lParam);
-        qDebug() << "lpdb = " << msg->lParam;
-        PDEV_BROADCAST_DEVICEINTERFACE pDevInf  = PDEV_BROADCAST_DEVICEINTERFACE(lpdb);
-        qDebug() << "pDevInf = " << pDevInf;
-        qDebug() << "pDevInf->dbcc_name = " << pDevInf->dbcc_name;
-        QString device_name = "插入设备(name)："+QString::fromWCharArray(pDevInf->dbcc_name,int(pDevInf->dbcc_size)).toUtf8();
-
-        qDebug() << device_name;*/
-        //bool dbg =  msg->lParam == WM_DEVICECHANGE;
-        //qDebug() << "msg->lParam == WM_DEVICECHANGE = " <<dbg;*/
-        //qDebug() << "WM_DEVICECHANGE type = " << typeid(WM_DEVICECHANGE).name();
-        //qDebug() << "msg->lParam type = " << typeid(msg->lParam).name();
-        //if(msg->wParam == DBT_DEVICEARRIVAL)
         emit DeviceChanged();
-        //if(msg->lParam == WM_DEVICECHANGE)
+
         if(msg->wParam == DBT_DEVICEARRIVAL)
         {
-            qDebug("usb in");
             emit DevicePlugIn();         //触发信号
         }
         if(msg->wParam == DBT_DEVICEREMOVECOMPLETE)
         {
-            qDebug("usb out");
-            emit DevicePlugOut();         //触发信号
+            emit DevicePlugOut();        //触发信号
         }
     }
 
-    return QWidget::nativeEvent(eventType, message, result);
+    // 事件过滤器约定：返回 true 表示事件已被处理并停止继续分发。
+    // 原实现返回 QWidget::nativeEvent(...)，那是 widget 自己的事件处理入口，
+    // 语义错误（过滤器不是事件接收者），此处明确返回 false。
+    return false;
+#else
+    // Linux 上没有原生设备通知：本过滤器返回 false（未处理），热插拔由
+    // MainWindow 里的定时器轮询兜底 —— m_deviceWatcher 定时调用 slot_refreshDevList()，
+    // 走的是与 Windows 原生通知**完全相同**的下游路径（见 mainwindow.cpp 的说明）。
+    // 若将来要换成 udev 或 `adb track-devices`，只需在这里发同样的信号。
+    Q_UNUSED(eventType);
+    Q_UNUSED(message);
+    Q_UNUSED(result);
+    return false;
+#endif
 }
 
 void usb_listener::EmitMySignal()
 {
     emit DevicePlugIn();
 }
-/*
-bool usb_listener::nativeEvent(const QByteArray &eventType, void *message, long long *result)
-{
-    MSG* msg = reinterpret_cast<MSG*>(message);//第一层解算
-    qDebug() << "msg = " << msg;
-    UINT msgType = msg->message;
-    if(msgType==WM_DEVICECHANGE)
-    {
-        PDEV_BROADCAST_HDR lpdb = PDEV_BROADCAST_HDR(msg->lParam);//第二层解算
-        switch (msg->wParam) {
-        case DBT_DEVICEARRIVAL:
-            if(lpdb->dbch_devicetype == DBT_DEVTYP_DEVICEINTERFACE)
-            {
-                PDEV_BROADCAST_DEVICEINTERFACE pDevInf  = PDEV_BROADCAST_DEVICEINTERFACE(lpdb);
-                QString device_name = "插入设备(name)："+QString::fromWCharArray(pDevInf->dbcc_name,int(pDevInf->dbcc_size)).toUtf8();
-
-                qDebug()<< device_name;
-            }
-            break;
-        case DBT_DEVICEREMOVECOMPLETE:
-            if(lpdb->dbch_devicetype == DBT_DEVTYP_DEVICEINTERFACE)
-            {
-                PDEV_BROADCAST_DEVICEINTERFACE pDevInf  = PDEV_BROADCAST_DEVICEINTERFACE(lpdb);
-                QString device_name = "移除设备(name)："+QString::fromWCharArray(pDevInf->dbcc_name,int(pDevInf->dbcc_size)).toUtf8();
-
-                qDebug()<< device_name;
-            }
-            break;
-        }
-    }
-    return false;
-}
-*/

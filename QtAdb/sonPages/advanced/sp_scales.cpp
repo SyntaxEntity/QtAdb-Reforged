@@ -1,5 +1,12 @@
 #include "sp_scales.h"
 #include "ui_sp_scales.h"
+#include <QRegularExpressionValidator>
+#include <QLineEdit>
+#include <QRegularExpression>
+#include "adbclient.h"
+#include "textexplainer.h"
+#include "adbcommands.h"
+#include "uishadow.h"
 
 sp_scales::sp_scales(QWidget *parent) :
     animationWidget(parent),
@@ -7,7 +14,6 @@ sp_scales::sp_scales(QWidget *parent) :
 {
     ui->setupUi(this);
 
-    process = new adbProcess();
     connect(this->ui->back_to_basePage,SIGNAL(clicked()),parent,SLOT(slot_destroySonPage()));
 
     setShadow(ui->back_to_basePage);
@@ -22,13 +28,19 @@ sp_scales::sp_scales(QWidget *parent) :
     setShadow(ui->label_window);
     setShadow(ui->label_transition);
 
-    ui->lineEdit_window->setPlaceholderText("修改为");
-    ui->lineEdit_animator->setPlaceholderText("修改为");
-    ui->lineEdit_transition->setPlaceholderText("修改为");
+    ui->lineEdit_window->setPlaceholderText(tr("修改为"));
+    ui->lineEdit_animator->setPlaceholderText(tr("修改为"));
+    ui->lineEdit_transition->setPlaceholderText(tr("修改为"));
 
-    ui->lineEdit_transition->setValidator(new QRegularExpressionValidator(QRegularExpression("^(([0-9]+\.[0-9]*[1-9][0-9]*)|([0-9]*[1-9][0-9]*\.[0-9]+)|([0-9]*[1-9][0-9]*))$")));
-    ui->lineEdit_animator->setValidator(new QRegularExpressionValidator(QRegularExpression("^(([0-9]+\.[0-9]*[1-9][0-9]*)|([0-9]*[1-9][0-9]*\.[0-9]+)|([0-9]*[1-9][0-9]*))$")));
-    ui->lineEdit_window->setValidator(new QRegularExpressionValidator(QRegularExpression("^(([0-9]+\.[0-9]*[1-9][0-9]*)|([0-9]*[1-9][0-9]*\.[0-9]+)|([0-9]*[1-9][0-9]*))$")));
+    // 三个输入框共用同一正则；父对象设为输入框本身 ——
+    // 原实现无父对象，而 QLineEdit::setValidator() 不接管所有权，
+    // 每建一次页面就泄漏 3 个验证器（LSan 报的栈就指向这里）。
+    const QRegularExpression scalePattern(QStringLiteral("^[0-9]+(\\.[0-9]+)?$"));
+    const QList<QLineEdit *> scaleEdits = { ui->lineEdit_transition, ui->lineEdit_animator, ui->lineEdit_window };
+    for(QLineEdit *edit : scaleEdits)
+    {
+        edit->setValidator(new QRegularExpressionValidator(scalePattern, edit));
+    }
 }
 
 sp_scales::~sp_scales()
@@ -39,52 +51,43 @@ sp_scales::~sp_scales()
 void sp_scales::setDev(device device)
 {
     dev = device;
-    qDebug() << "//////////////////////////////////////////////" << dev.model;
     refresh();
 }
 
 
 void sp_scales::setShadow(QWidget* wgt)
 {
-    QGraphicsDropShadowEffect *shadowEffect_widget = new QGraphicsDropShadowEffect(this);
-    shadowEffect_widget->setOffset(0,0);
-    shadowEffect_widget->setColor(Qt::gray);
-    shadowEffect_widget->setBlurRadius(5);
-    wgt->setGraphicsEffect(shadowEffect_widget);
+    applyDropShadow(wgt);
 }
 
 void sp_scales::refresh()
 {
-    /*
-    pageListItemStruct *screen_resolution = initStruct(devInfo);
-    screen_resolution->item->setText_title("屏幕分辨率");
-    screen_resolution->item->setPic(":/ico/image/ico/fullscreen-line.svg");
-    screen_resolution->thread->initThread("adb shell wm size", dev, ": ");
-    QEventLoop::connect(screen_resolution->thread,SIGNAL(signal_output(QString)),screen_resolution->item,SLOT(slot_setText_profile(QString)));
-    screen_resolution->thread->start();
-    screen_resolution->item->setSelectable();
-    devInfo->addItemsToList(screen_resolution->item);
-    */
 
 
     adbThread *thread_animator = new adbThread(this);
-    thread_animator->initThread("adb shell settings get global animator_duration_scale", dev);
+    thread_animator->initThread(AdbCmd::settingsGet("global", "animator_duration_scale"), dev);
     QEventLoop::connect(thread_animator,SIGNAL(signal_output(QString)),this,SLOT(setText_animator(QString)));
+    // 线程结束后自行释放：原实现每次刷新都新建线程并一直累积到页面销毁
+    connect(thread_animator,SIGNAL(finished()),thread_animator,SLOT(deleteLater()));
     thread_animator->start();
 
     adbThread *thread_transition = new adbThread(this);
-    thread_transition->initThread("adb shell settings get global transition_animation_scale", dev);
+    thread_transition->initThread(AdbCmd::settingsGet("global", "transition_animation_scale"), dev);
     QEventLoop::connect(thread_transition,SIGNAL(signal_output(QString)),this,SLOT(setText_transition(QString)));
+    // 线程结束后自行释放：原实现每次刷新都新建线程并一直累积到页面销毁
+    connect(thread_transition,SIGNAL(finished()),thread_transition,SLOT(deleteLater()));
     thread_transition->start();
 
     adbThread *thread_window = new adbThread(this);
-    thread_window->initThread("adb shell settings get global window_animation_scale", dev);
+    thread_window->initThread(AdbCmd::settingsGet("global", "window_animation_scale"), dev);
     QEventLoop::connect(thread_window,SIGNAL(signal_output(QString)),this,SLOT(setText_window(QString)));
+    // 线程结束后自行释放：原实现每次刷新都新建线程并一直累积到页面销毁
+    connect(thread_window,SIGNAL(finished()),thread_window,SLOT(deleteLater()));
     thread_window->start();
 
-    //ui->current_animator->setText("当前：" + process->run("adb shell settings get global animator_duration_scale",dev).simplified());
-    //ui->current_transition->setText("当前：" + process->run("adb shell settings get global transition_animation_scale",dev).simplified());
-    //ui->current_window->setText("当前：" + process->run("adb shell settings get global window_animation_scale",dev).simplified());
+    //ui->current_animator->setText("当前：" + process->run(AdbCmd::settingsGet("global", "animator_duration_scale"),dev).simplified());
+    //ui->current_transition->setText("当前：" + process->run(AdbCmd::settingsGet("global", "transition_animation_scale"),dev).simplified());
+    //ui->current_window->setText("当前：" + process->run(AdbCmd::settingsGet("global", "window_animation_scale"),dev).simplified());
     ui->lineEdit_transition->clear();
     ui->lineEdit_window->clear();
     ui->lineEdit_animator->clear();
@@ -92,34 +95,53 @@ void sp_scales::refresh()
 
 void sp_scales::on_pushButton_animation_clicked()
 {
-    //QMessageBox::StandardButton result=QMessageBox::warning(NULL, "动画时长缩放","确定修改");
-    process->run("adb shell settings put global animator_duration_scale " + ui->lineEdit_animator->text().simplified(), dev);
+    // 输入校验：原实现直接取文本框内容拼接命令，空值或非法值会被原样写进系统设置
+    // （校验器此前还拒绝输入 0，导致"关闭动画"这一常用取值无法设置）。
+    if(!ui->lineEdit_animator->hasAcceptableInput())
+    {
+        QMessageBox::information(this, tr("输入无效"), tr("请输入非负数值，例如 0、0.5 或 1。"));
+        return;
+    }
+    // 异步下发：原同步调用会阻塞界面直到命令结束
+    AdbClient::instance()->runForDevice(dev.addr, AdbCmd::settingsPut("global", "animator_duration_scale", ui->lineEdit_animator->text().simplified()));
     refresh();
 }
 
 void sp_scales::on_pushButton_transition_clicked()
 {
-    process->run("adb shell settings put global transition_animation_scale " + ui->lineEdit_transition->text().simplified(), dev);
+    if(!ui->lineEdit_transition->hasAcceptableInput())
+    {
+        QMessageBox::information(this, tr("输入无效"), tr("请输入非负数值，例如 0、0.5 或 1。"));
+        return;
+    }
+    // 异步下发：原同步调用会阻塞界面直到命令结束
+    AdbClient::instance()->runForDevice(dev.addr, AdbCmd::settingsPut("global", "transition_animation_scale", ui->lineEdit_transition->text().simplified()));
     refresh();
 }
 
 void sp_scales::on_pushButton_window_clicked()
 {
-    process->run("adb shell settings put global window_animation_scale " + ui->lineEdit_window->text().simplified(), dev);
+    if(!ui->lineEdit_window->hasAcceptableInput())
+    {
+        QMessageBox::information(this, tr("输入无效"), tr("请输入非负数值，例如 0、0.5 或 1。"));
+        return;
+    }
+    // 异步下发：原同步调用会阻塞界面直到命令结束
+    AdbClient::instance()->runForDevice(dev.addr, AdbCmd::settingsPut("global", "window_animation_scale", ui->lineEdit_window->text().simplified()));
     refresh();
 }
 
 void sp_scales::setText_animator(QString s)
 {
-    ui->current_animator->setText("当前：" + s.simplified());
+    ui->current_animator->setText(tr("当前：") + s.simplified());
 }
 
 void sp_scales::setText_transition(QString s)
 {
-    ui->current_transition->setText("当前：" + s.simplified());
+    ui->current_transition->setText(tr("当前：") + s.simplified());
 }
 
 void sp_scales::setText_window(QString s)
 {
-    ui->current_window->setText("当前：" + s.simplified());
+    ui->current_window->setText(tr("当前：") + s.simplified());
 }

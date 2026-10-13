@@ -3,6 +3,8 @@
 #include "qicon.h"
 #include "qscrollbar.h"
 #include "ui_links.h"
+#include "qssloader.h"
+#include "uishadow.h"
 
 links::links(QWidget *parent) :
     QWidget(parent),
@@ -11,13 +13,11 @@ links::links(QWidget *parent) :
     ui->setupUi(this);
 
 
-    this->setWindowTitle("相关链接");
+    this->setWindowTitle(tr("相关链接"));
     this->setWindowIcon(QIcon(":/ico/image/ico/link.svg"));
 
-    QFile file("://qss/scrollbar.qss");
-    file.open(QFile::ReadOnly);
-    ui->scrollArea->verticalScrollBar()->setStyleSheet(file.readAll());
-    ui->scrollArea->horizontalScrollBar()->setStyleSheet(file.readAll());
+    // 读取失败时给出警告并跳过（原实现不检查 QFile::open 的返回值）
+    applyScrollBarStyle(ui->scrollArea);
 
     setShadow(ui->widget_11);
     setShadow(ui->widget_12);
@@ -32,9 +32,5 @@ links::~links()
 
 void links::setShadow(QWidget* wgt)
 {
-    QGraphicsDropShadowEffect *shadowEffect_widget = new QGraphicsDropShadowEffect(this);
-    shadowEffect_widget->setOffset(0,0);
-    shadowEffect_widget->setColor(Qt::gray);
-    shadowEffect_widget->setBlurRadius(5);
-    wgt->setGraphicsEffect(shadowEffect_widget);
+    applyDropShadow(wgt);
 }

@@ -39,7 +39,7 @@ private slots:
     void on_btn_qgroup_clicked();
 
 private:
-    Ui::about *ui;
+    Ui::about *ui = nullptr;
 };
 
 #endif // ABOUT_H

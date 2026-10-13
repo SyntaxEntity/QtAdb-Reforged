@@ -2,6 +2,7 @@
 #define MAINWINDOW_H
 
 #include <QMainWindow>
+#include <QPointer>
 #include <QDir>
 #include <QGraphicsEffect>
 #include <QMessageBox>
@@ -9,9 +10,6 @@
 #include <QScroller>
 #include <QLineEdit>
 #include <QMouseEvent>
-#include <QTextCodec>
-#include <QRegExp>
-#include "adbprocess.h"
 #include "textexplainer.h"
 #include "indexlistitem.h"
 #include "basepage.h"
@@ -28,8 +26,6 @@
 #include <QFont>
 #include <QMovie>
 
-#include <windows.h>
-
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
 QT_END_NAMESPACE
@@ -44,29 +40,34 @@ public:
     MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
 
-    adbProcess *process;
-    textExplainer *explainer;
-    pageMaker *maker;
+    textExplainer *explainer = nullptr;
+    pageMaker *maker = nullptr;
 
-    QWidget * getInfo;
-    QWidget * magiskSaver;
-    QLineEdit * le_outIp;
-    QLineEdit * le_outPort;
-    QLineEdit * le_ipAddr;
-    QLineEdit * le_port;
-    QLineEdit * le_code;
+    QPointer<QWidget> getInfo = nullptr;   // 关闭即删，指针可能随时变空
+    QPointer<QWidget> magiskSaver = nullptr;   // 关闭即删，指针可能随时变空
+    QLineEdit * le_outIp = nullptr;
+    QLineEdit * le_outPort = nullptr;
+    QLineEdit * le_ipAddr = nullptr;
+    QLineEdit * le_port = nullptr;
+    QLineEdit * le_code = nullptr;
 
     int current_device;
     QList<device> devList;
-    indexListItem listItems[10];
     void refreshDevList();
+    // 用 `adb devices -l` 的输出更新设备列表与界面（refreshDevList 的异步完成阶段）
+    void applyDeviceList(const QString &output);
+    // applyDeviceList() 拆出来的两段（原来都内联在里面）
+    void rebuildDeviceCombo(const QList<int> &offline);        // 断连→清空→重填→重连
+    void updateDeviceIndicators(const QList<int> &offline);    // 自动选中/置灰/顶部标签/监视器
     void addItemToIndex(indexListItem *itemWidget);
     void lock();
     void unlock();
-    void hideCurrentPage();
 
 private slots:
     void on_refreshButton_clicked();
+    // 异步 ADB 请求完成（当前用于设备列表刷新）
+    void onAdbRequestFinished(int requestId, int exitCode,
+                              const QString &standardOutput, const QString &standardError);
     void setCurrentDevice(int index);
     void initBasePage(int key);
     void initSonPage(int key);
@@ -85,13 +86,19 @@ private slots:
     void slot_save_magisk();
 
 private:
-    Ui::MainWindow *ui;
+    Ui::MainWindow *ui = nullptr;
 
     void initEnvironmentPATH();
     void addIndexItems();
     void setStyles();
 
+    // 无线调试窗口的两个表单区块（各自建一个面板返回）
+    QWidget *buildWirelessOutPanel(QWidget *parent);
+    QWidget *buildWirelessPairPanel(QWidget *parent);
+
     void resetMonitorThread(int);
+    // 请求监视线程退出并断开其信号（线程自行结束后由 deleteLater 释放）
+    void stopMonitorThread();
 
     bool taiChi = true;     //界面锁定定时器
     bool liangYi = false;   //判断刷新按钮槽函数是被谁调用：false：刷新按钮 click（）调用 ； true： 热插拔相关
@@ -100,20 +107,20 @@ private:
     //布尔 太极 为 真;
 
     bool firstBoot = true;
-    QTimer *taiChiTimer;
-    QTimer *baguaTimer;
-    QTimer *siXiangTimer = NULL;
+    QTimer *taiChiTimer = nullptr;
 
-    basePage * currentPage;
-    animationWidget * tmpPage;
-    about * WCMPage2;
-    usb_listener *listener;
+    basePage * currentPage = nullptr;
+    usb_listener *listener = nullptr;
 
     thread_monitor *thread_mon = NULL;
 
-    comboboxListWidget *view;
+    // 在途的设备列表请求号（0 表示没有）；用于避免重复排队并过滤异步结果
+    int m_deviceListRequest = 0;
+    // 设备热插拔轮询定时器（见构造函数中的说明）
+    QTimer *m_deviceWatcher = nullptr;
 
-    basePage *plugin;
+    comboboxListWidget *view = nullptr;
+
 
 public slots:
     void DevicePlugIn();

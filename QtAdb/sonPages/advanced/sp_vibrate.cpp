@@ -1,6 +1,15 @@
 #include "sp_vibrate.h"
 #include "qscrollbar.h"
 #include "ui_sp_vibrate.h"
+#include <QLabel>
+#include <QPushButton>
+#include <QLineEdit>
+#include <QRegularExpression>
+#include "qssloader.h"
+#include "adbclient.h"
+#include "textexplainer.h"
+#include "adbcommands.h"
+#include "uishadow.h"
 
 sp_vibrate::sp_vibrate(QWidget *parent) :
     animationWidget(parent),
@@ -8,70 +17,55 @@ sp_vibrate::sp_vibrate(QWidget *parent) :
 {
     ui->setupUi(this);
 
-    process = new adbProcess();
     connect(this->ui->back_to_basePage,SIGNAL(clicked()),parent,SLOT(slot_destroySonPage()));
 
-    QFile file("://qss/scrollbar.qss");
-    file.open(QFile::ReadOnly);
-    ui->scrollArea->verticalScrollBar()->setStyleSheet(file.readAll());
+    // 读取失败时给出警告并跳过（原实现不检查 QFile::open 的返回值）
+    applyScrollBarStyle(ui->scrollArea);
 
-    ui->lineEdit_all->setPlaceholderText("0关   1开");
-    ui->lineEdit_all_charge->setPlaceholderText("0关   1开");
-    ui->lineEdit_all_haptic->setPlaceholderText("0关   1开");
-    ui->lineEdit_all_ring->setPlaceholderText("0关   1开");
-    ui->lineEdit_haptic->setPlaceholderText("请输入等级");
-    ui->lineEdit_haptic_hardware->setPlaceholderText("请输入等级");
-    ui->lineEdit_media->setPlaceholderText("请输入等级");
-    ui->lineEdit_alarm->setPlaceholderText("请输入等级");
-    ui->lineEdit_ring->setPlaceholderText("请输入等级");
-    ui->lineEdit_notification->setPlaceholderText("请输入等级");
+    // 同类输入框共用提示语
+    const QList<QLineEdit *> onOffEdits = { ui->lineEdit_all, ui->lineEdit_all_charge,
+                                            ui->lineEdit_all_haptic, ui->lineEdit_all_ring };
+    for(QLineEdit *edit : onOffEdits)
+    {
+        edit->setPlaceholderText(tr("0关   1开"));
+    }
+    const QList<QLineEdit *> levelEdits = { ui->lineEdit_haptic, ui->lineEdit_haptic_hardware,
+                                            ui->lineEdit_media, ui->lineEdit_alarm,
+                                            ui->lineEdit_ring, ui->lineEdit_notification };
+    for(QLineEdit *edit : levelEdits)
+    {
+        edit->setPlaceholderText(tr("请输入等级"));
+    }
 
-    ui->lineEdit_alarm->setValidator(new QRegularExpressionValidator(QRegularExpression("^(([0-9]+\.[0-9]*[1-9][0-9]*)|([0-9]*[1-9][0-9]*\.[0-9]+)|([0-9]*[1-9][0-9]*))$")));
-    ui->lineEdit_all->setValidator(new QRegularExpressionValidator(QRegularExpression("^(([0-9]+\.[0-9]*[1-9][0-9]*)|([0-9]*[1-9][0-9]*\.[0-9]+)|([0-9]*[1-9][0-9]*))$")));
-    ui->lineEdit_all_charge->setValidator(new QRegularExpressionValidator(QRegularExpression("^(([0-9]+\.[0-9]*[1-9][0-9]*)|([0-9]*[1-9][0-9]*\.[0-9]+)|([0-9]*[1-9][0-9]*))$")));
-    ui->lineEdit_all_haptic->setValidator(new QRegularExpressionValidator(QRegularExpression("^(([0-9]+\.[0-9]*[1-9][0-9]*)|([0-9]*[1-9][0-9]*\.[0-9]+)|([0-9]*[1-9][0-9]*))$")));
-    ui->lineEdit_all_ring->setValidator(new QRegularExpressionValidator(QRegularExpression("^(([0-9]+\.[0-9]*[1-9][0-9]*)|([0-9]*[1-9][0-9]*\.[0-9]+)|([0-9]*[1-9][0-9]*))$")));
-    ui->lineEdit_haptic->setValidator(new QRegularExpressionValidator(QRegularExpression("^(([0-9]+\.[0-9]*[1-9][0-9]*)|([0-9]*[1-9][0-9]*\.[0-9]+)|([0-9]*[1-9][0-9]*))$")));
-    ui->lineEdit_haptic_hardware->setValidator(new QRegularExpressionValidator(QRegularExpression("^(([0-9]+\.[0-9]*[1-9][0-9]*)|([0-9]*[1-9][0-9]*\.[0-9]+)|([0-9]*[1-9][0-9]*))$")));
-    ui->lineEdit_media->setValidator(new QRegularExpressionValidator(QRegularExpression("^(([0-9]+\.[0-9]*[1-9][0-9]*)|([0-9]*[1-9][0-9]*\.[0-9]+)|([0-9]*[1-9][0-9]*))$")));
-    ui->lineEdit_notification->setValidator(new QRegularExpressionValidator(QRegularExpression("^(([0-9]+\.[0-9]*[1-9][0-9]*)|([0-9]*[1-9][0-9]*\.[0-9]+)|([0-9]*[1-9][0-9]*))$")));
-    ui->lineEdit_ring->setValidator(new QRegularExpressionValidator(QRegularExpression("^(([0-9]+\.[0-9]*[1-9][0-9]*)|([0-9]*[1-9][0-9]*\.[0-9]+)|([0-9]*[1-9][0-9]*))$")));
+    // 同一正则；父对象设为输入框本身 —— 原实现无父对象而 setValidator() 不接管所有权，
+    // 每建一次页面泄漏 10 个验证器（LSan 报的 52 个就是它们）。
+    const QRegularExpression levelPattern(QStringLiteral("^[0-9]+(\\.[0-9]+)?$"));
+    const QList<QLineEdit *> validatedEdits = { ui->lineEdit_alarm, ui->lineEdit_all,
+                                                ui->lineEdit_all_charge, ui->lineEdit_all_haptic,
+                                                ui->lineEdit_all_ring, ui->lineEdit_haptic,
+                                                ui->lineEdit_haptic_hardware, ui->lineEdit_media,
+                                                ui->lineEdit_notification, ui->lineEdit_ring };
+    for(QLineEdit *edit : validatedEdits)
+    {
+        edit->setValidator(new QRegularExpressionValidator(levelPattern, edit));
+    }
 
-    setShadow(ui->label_all);
-    setShadow(ui->label_all_charge);
-    setShadow(ui->label_all_haptic);
-    setShadow(ui->label_all_ring);
-    setShadow(ui->label_level_haptic);
-    setShadow(ui->label_level_haptic_hardware);
-    setShadow(ui->label_level_alarm);
-    setShadow(ui->label_level_media);
-    setShadow(ui->label_level_notification);
-    setShadow(ui->label_level_ring);
+    // 投影：原实现逐条列举 32 个控件，漏了不会报错。改为遍历（覆盖集合由 --effects 探针核对）。
+    for(QPushButton *button : findChildren<QPushButton *>())
+    {
+        setShadow(button);
+    }
+    for(QLabel *label : findChildren<QLabel *>())
+    {
+        if(label == ui->title || label == ui->icon)
+        {
+            continue;
+        }
+        setShadow(label);
+    }
 
-    setShadow(ui->current_all);
-    setShadow(ui->current_all_charge);
-    setShadow(ui->current_all_haptic);
-    setShadow(ui->current_all_ring);
-    setShadow(ui->current_haptic);
-    setShadow(ui->current_haptic_hardware);
-    setShadow(ui->current_alarm);
-    setShadow(ui->current_media);
-    setShadow(ui->current_ring);
-    setShadow(ui->current_notification);
 
-    setShadow(ui->pushButton_all);
-    setShadow(ui->pushButton_all_charge);
-    setShadow(ui->pushButton_all_ring);
-    setShadow(ui->pushButton_all_thaptic);
-    setShadow(ui->pushButton_alarm);
-    setShadow(ui->pushButton_haptic);
-    setShadow(ui->pushButton_media);
-    setShadow(ui->pushButton_haptic_hardware);
-    setShadow(ui->pushButton_ring);
-    setShadow(ui->pushButton_notificaton);
 
-    setShadow(ui->back_to_basePage);
-    setShadow(ui->pushButton);
 }
 
 sp_vibrate::~sp_vibrate()
@@ -82,219 +76,158 @@ sp_vibrate::~sp_vibrate()
 void sp_vibrate::setDev(device device)
 {
     dev = device;
-    qDebug() << "//////////////////////////////////////////////" << dev.model;
     refresh();
 }
 
 void sp_vibrate::setShadow(QWidget* wgt)
 {
-    QGraphicsDropShadowEffect *shadowEffect_widget = new QGraphicsDropShadowEffect(this);
-    shadowEffect_widget->setOffset(0,0);
-    shadowEffect_widget->setColor(Qt::gray);
-    shadowEffect_widget->setBlurRadius(5);
-    wgt->setGraphicsEffect(shadowEffect_widget);
+    applyDropShadow(wgt);
 }
 
+
+// 起一个"读某个 system settings 键并把结果回填到指定槽"的临时线程。
+// 收这段是因为 refresh() 里重复了 10 遍；槽用成员函数指针传，类型安全。
+void sp_vibrate::requestSetting(const QString &systemKey, void (sp_vibrate::*slot)(QString))
+{
+    adbThread *thread = new adbThread(this);
+    thread->initThread(AdbCmd::settingsGet("system", systemKey), dev);
+    connect(thread, &adbThread::signal_output, this, slot);
+    // 线程结束后自行释放（原实现每次刷新都新建线程并累积到页面销毁）
+    connect(thread, &adbThread::finished, thread, &QObject::deleteLater);
+    thread->start();
+}
 
 void sp_vibrate::refresh()
 {
-    /*
-     *     void setText_all(QString);
-    void setText_all_haptics(QString);
-    void setText_all_charge(QString);
-    void setText_all_ring(QString);
-    void setText_level_haptic(QString);
-    void setText_level_haptic_hardware(QString);
-    void setText_level_alarm(QString);
-    void setText_level_media(QString);
-    void setText_level_notification(QString);
-    void setText_level_ring(QString);
-     *
-     * */
-    adbThread *thread_all = new adbThread(this);
-    thread_all->initThread("adb shell settings get system vibrate_on", dev);
-    QEventLoop::connect(thread_all,SIGNAL(signal_output(QString)),this,SLOT(setText_all(QString)));
-    thread_all->start();
-
-    adbThread *thread_all_haptics = new adbThread(this);
-    thread_all_haptics->initThread("adb shell settings get system haptic_feedback_enabled", dev);
-    QEventLoop::connect(thread_all_haptics,SIGNAL(signal_output(QString)),this,SLOT(setText_all_haptics(QString)));
-    thread_all_haptics->start();
-
-    adbThread *thread_all_ring = new adbThread(this);
-    thread_all_ring->initThread("adb shell settings get system vibrate_when_ringing", dev);
-    QEventLoop::connect(thread_all_ring,SIGNAL(signal_output(QString)),this,SLOT(setText_all_ring(QString)));
-    thread_all_ring->start();
-
-    adbThread *thread_all_charge = new adbThread(this);
-    thread_all_charge->initThread("adb shell settings get system charging_vibration_enabled", dev);
-    QEventLoop::connect(thread_all_charge,SIGNAL(signal_output(QString)),this,SLOT(setText_all_charge(QString)));
-    thread_all_charge->start();
-
-    adbThread *thread_level_haptics = new adbThread(this);
-    thread_level_haptics->initThread("adb shell settings get system haptic_feedback_intensity", dev);
-    QEventLoop::connect(thread_level_haptics,SIGNAL(signal_output(QString)),this,SLOT(setText_level_haptics(QString)));
-    thread_level_haptics->start();
-
-    adbThread *thread_level_haptics_hardware = new adbThread(this);
-    thread_level_haptics_hardware->initThread("adb shell settings get system hardware_haptic_feedback_intensity", dev);
-    QEventLoop::connect(thread_level_haptics_hardware,SIGNAL(signal_output(QString)),this,SLOT(setText_level_haptics_hardware(QString)));
-    thread_level_haptics_hardware->start();
-
-    adbThread *thread_level_notification = new adbThread(this);
-    thread_level_notification->initThread("adb shell settings get system notification_vibration_intensity", dev);
-    QEventLoop::connect(thread_level_notification,SIGNAL(signal_output(QString)),this,SLOT(setText_level_notification(QString)));
-    thread_level_notification->start();
-
-    adbThread *thread_level_alarm = new adbThread(this);
-    thread_level_alarm->initThread("adb shell settings get system alarm_vibration_intensity", dev);
-    QEventLoop::connect(thread_level_alarm,SIGNAL(signal_output(QString)),this,SLOT(setText_level_alarm(QString)));
-    thread_level_alarm->start();
-
-    adbThread *thread_level_media = new adbThread(this);
-    thread_level_media->initThread("adb shell settings get system media_vibration_intensity", dev);
-    QEventLoop::connect(thread_level_media,SIGNAL(signal_output(QString)),this,SLOT(setText_level_media(QString)));
-    thread_level_media->start();
-
-    adbThread *thread_level_ring = new adbThread(this);
-    thread_level_ring->initThread("adb shell settings get system ring_vibration_intensity", dev);
-    QEventLoop::connect(thread_level_ring,SIGNAL(signal_output(QString)),this,SLOT(setText_level_ring(QString)));
-    thread_level_ring->start();
-
-    //ui->current_animator->setText("当前：" + process->run("adb shell settings get global animator_duration_scale",dev).simplified());
-    //ui->current_transition->setText("当前：" + process->run("adb shell settings get global transition_animation_scale",dev).simplified());
-    //ui->current_window->setText("当前：" + process->run("adb shell settings get global window_animation_scale",dev).simplified());
-    //ui->lineEdit_transition->clear();
-    //ui->lineEdit_window->clear();
-    //ui->lineEdit_animator->clear();
-    ui->lineEdit_all->clear();
-    ui->lineEdit_all_charge->clear();
-    ui->lineEdit_all_haptic->clear();
-    ui->lineEdit_all_ring->clear();
-    ui->lineEdit_haptic->clear();
-    ui->lineEdit_haptic_hardware->clear();
-    ui->lineEdit_alarm->clear();
-    ui->lineEdit_media->clear();
-    ui->lineEdit_notification->clear();
-    ui->lineEdit_ring->clear();
+    // 10 个请求只有"键名 + 目标槽"不同：原来每个都是 5 行（连注释都重复了 10 遍）。
+    // 具体见 requestSetting()。
+    requestSetting(QStringLiteral("vibrate_on"), &sp_vibrate::setText_all);
+    requestSetting(QStringLiteral("haptic_feedback_enabled"), &sp_vibrate::setText_all_haptics);
+    requestSetting(QStringLiteral("vibrate_when_ringing"), &sp_vibrate::setText_all_ring);
+    requestSetting(QStringLiteral("charging_vibration_enabled"), &sp_vibrate::setText_all_charge);
+    requestSetting(QStringLiteral("haptic_feedback_intensity"), &sp_vibrate::setText_level_haptics);
+    requestSetting(QStringLiteral("hardware_haptic_feedback_intensity"), &sp_vibrate::setText_level_haptics_hardware);
+    requestSetting(QStringLiteral("notification_vibration_intensity"), &sp_vibrate::setText_level_notification);
+    requestSetting(QStringLiteral("alarm_vibration_intensity"), &sp_vibrate::setText_level_alarm);
+    requestSetting(QStringLiteral("media_vibration_intensity"), &sp_vibrate::setText_level_media);
+    requestSetting(QStringLiteral("ring_vibration_intensity"), &sp_vibrate::setText_level_ring);
 }
+
 
 void sp_vibrate::setText_all(QString s)
 {
-    ui->current_all->setText("当前：" + s.simplified());
+    ui->current_all->setText(tr("当前：") + s.simplified());
 }
 
 void sp_vibrate::setText_all_haptics(QString s)
 {
-    ui->current_all_haptic->setText("当前：" + s.simplified());
+    ui->current_all_haptic->setText(tr("当前：") + s.simplified());
 }
 
 void sp_vibrate::setText_all_charge(QString s)
 {
-    ui->current_all_charge->setText("当前：" + s.simplified());
+    ui->current_all_charge->setText(tr("当前：") + s.simplified());
 }
 
 void sp_vibrate::setText_all_ring(QString s)
 {
-    ui->current_all_ring->setText("当前：" + s.simplified());
+    ui->current_all_ring->setText(tr("当前：") + s.simplified());
 }
 
 void sp_vibrate::setText_level_haptics(QString s)
 {
-    ui->current_haptic->setText("当前：" + s.simplified());
+    ui->current_haptic->setText(tr("当前：") + s.simplified());
 }
 
 void sp_vibrate::setText_level_haptics_hardware(QString s)
 {
-    ui->current_haptic_hardware->setText("当前：" + s.simplified());
+    ui->current_haptic_hardware->setText(tr("当前：") + s.simplified());
 }
 
 void sp_vibrate::setText_level_alarm(QString s)
 {
-    ui->current_alarm->setText("当前：" + s.simplified());
+    ui->current_alarm->setText(tr("当前：") + s.simplified());
 }
 
 void sp_vibrate::setText_level_media(QString s)
 {
-    ui->current_media->setText("当前：" + s.simplified());
+    ui->current_media->setText(tr("当前：") + s.simplified());
 }
 
 void sp_vibrate::setText_level_notification(QString s)
 {
-    ui->current_notification->setText("当前：" + s.simplified());
+    ui->current_notification->setText(tr("当前：") + s.simplified());
 }
 
 void sp_vibrate::setText_level_ring(QString s)
 {
-    ui->current_ring->setText("当前：" + s.simplified());
+    ui->current_ring->setText(tr("当前：") + s.simplified());
+}
+
+// 10 个"应用"按钮原本各自复制一份相同的代码，且都不检查输入有效性：
+// 输入为空或非法（例如单独一个小数点）时会把垃圾值直接写进系统设置。
+bool sp_vibrate::applySetting(const QString &key, QLineEdit *edit)
+{
+    if(edit == nullptr || !edit->hasAcceptableInput())
+    {
+        QMessageBox::information(this, tr("输入无效"), tr("请输入非负数值，例如 0、0.5 或 1。"));
+        return false;
+    }
+
+    // 异步下发：原同步调用会阻塞界面直到命令结束
+    AdbClient::instance()->runForDevice(dev.addr, AdbCmd::settingsPut("system", key, edit->text().simplified()));
+    refresh();
+    return true;
 }
 
 void sp_vibrate::on_pushButton_all_clicked()
 {
-    process->run("adb shell settings put system vibrate_on " + ui->lineEdit_all->text().simplified(), dev);
-    refresh();
+    applySetting("vibrate_on", ui->lineEdit_all);
 }
-
 
 void sp_vibrate::on_pushButton_all_thaptic_clicked()
 {
-    process->run("adb shell settings put system haptic_feedback_enabled " + ui->lineEdit_all_haptic->text().simplified(), dev);
-    refresh();
+    applySetting("haptic_feedback_enabled", ui->lineEdit_all_haptic);
 }
-
 
 void sp_vibrate::on_pushButton_all_ring_clicked()
 {
-    process->run("adb shell settings put system vibrate_when_ringing " + ui->lineEdit_all_ring->text().simplified(), dev);
-    refresh();
+    applySetting("vibrate_when_ringing", ui->lineEdit_all_ring);
 }
-
 
 void sp_vibrate::on_pushButton_all_charge_clicked()
 {
-    process->run("adb shell settings put system charging_vibration_enabled " + ui->lineEdit_all_charge->text().simplified(), dev);
-    refresh();
+    applySetting("charging_vibration_enabled", ui->lineEdit_all_charge);
 }
-
 
 void sp_vibrate::on_pushButton_haptic_clicked()
 {
-    process->run("adb shell settings put system haptic_feedback_intensity " + ui->lineEdit_haptic->text().simplified(), dev);
-    refresh();
+    applySetting("haptic_feedback_intensity", ui->lineEdit_haptic);
 }
-
 
 void sp_vibrate::on_pushButton_haptic_hardware_clicked()
 {
-    process->run("adb shell settings put system hardware_haptic_feedback_intensity " + ui->lineEdit_haptic_hardware->text().simplified(), dev);
-    refresh();
+    applySetting("hardware_haptic_feedback_intensity", ui->lineEdit_haptic_hardware);
 }
-
 
 void sp_vibrate::on_pushButton_notificaton_clicked()
 {
-    process->run("adb shell settings put system notification_vibration_intensity " + ui->lineEdit_notification->text().simplified(), dev);
-    refresh();
+    applySetting("notification_vibration_intensity", ui->lineEdit_notification);
 }
-
 
 void sp_vibrate::on_pushButton_alarm_clicked()
 {
-    process->run("adb shell settings put system alarm_vibration_intensity " + ui->lineEdit_alarm->text().simplified(), dev);
-    refresh();
+    applySetting("alarm_vibration_intensity", ui->lineEdit_alarm);
 }
-
 
 void sp_vibrate::on_pushButton_media_clicked()
 {
-    process->run("adb shell settings put system media_vibration_intensity " + ui->lineEdit_media->text().simplified(), dev);
-    refresh();
+    applySetting("media_vibration_intensity", ui->lineEdit_media);
 }
-
 
 void sp_vibrate::on_pushButton_ring_clicked()
 {
-    process->run("adb shell settings put system ring_vibration_intensity " + ui->lineEdit_ring->text().simplified(), dev);
-    refresh();
+    applySetting("ring_vibration_intensity", ui->lineEdit_ring);
 }
+
 

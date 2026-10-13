@@ -9,6 +9,7 @@
 #include <QScrollBar>
 #include <QFile>
 #include "../../animationwidget.h"
+#include "textexplainer.h"
 
 namespace Ui {
 class sp_users;
@@ -34,11 +35,11 @@ public slots:
     void refresh_tableView(QString);
 
 private:
-    Ui::sp_users *ui;
+    Ui::sp_users *ui = nullptr;
 
-    adbProcess *process;
-    adbThread *thread;
-    textExplainer *explainer;
+    adbThread *thread = nullptr;
+    // 值成员：原先这里是未初始化的裸指针，解引用属未定义行为
+    textExplainer explainer;
 };
 
 #endif // SP_USERS_H

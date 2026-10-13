@@ -5,7 +5,6 @@
 #include <QTimer>
 #include <QClipboard>
 #include <QGraphicsDropShadowEffect>
-#include "adbprocess.h"
 
 namespace Ui {
 class standardOutputPage;
@@ -16,13 +15,12 @@ class standardOutputPage : public QWidget
     Q_OBJECT
 
 public:
-    explicit standardOutputPage(QWidget *parent = nullptr , adbProcess *cess = NULL);
+    explicit standardOutputPage(QWidget *parent = nullptr);
     ~standardOutputPage();
-    adbProcess *process;
     QString text;
 
 private:
-    Ui::standardOutputPage *ui;
+    Ui::standardOutputPage *ui = nullptr;
 
 public slots:
     void update(QString);

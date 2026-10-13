@@ -7,10 +7,10 @@ noticeWidget::noticeWidget(QWidget *parent) :
     ui(new Ui::noticeWidget)
 {
     ui->setupUi(this);
-    animation = new QPropertyAnimation(this,"geometry");
+    // 第三个参数是 parent：原实现省略了它，动画没有父对象 —— 每个通知控件都会漏。
+    animation = new QPropertyAnimation(this, "geometry", this);
     setParent(parent);
 
-    //this->setWindowFlags(Qt::FramelessWindowHint);
     this->setWindowFlags(Qt::FramelessWindowHint|Qt::Tool|Qt::WindowStaysOnTopHint);
     setWindowFlag(Qt::FramelessWindowHint);
     setAttribute(Qt::WA_TranslucentBackground);
@@ -35,10 +35,7 @@ noticeWidget::noticeWidget(QWidget *parent) :
     int x = QCursor().pos().x();
     int y = QCursor().pos().y();
     animation->setDuration(750);
-    //animation->setEndValue(QPoint(301,117));
-    qDebug() << "cursor = " << x << "/"<< y;
     animation->setEndValue(QRect(x,y, 120,70));
-    //animation->setStartValue(QPoint(301 + 50,117));
     animation->setStartValue(QRect(x-30,y, 120,70));
 
     animation->setEasingCurve(QEasingCurve::OutQuart);
@@ -47,7 +44,6 @@ noticeWidget::noticeWidget(QWidget *parent) :
 void noticeWidget::popUp(QString message)
 {
     ui->label->setText(message);
-    //this->show();
     animation->start();
     this->show();
 

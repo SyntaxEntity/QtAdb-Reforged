@@ -1,0 +1,50 @@
+# ---- 构建产物 ----
+build/
+build-*/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+*.cmake.stash
+.qmake.stash
+Makefile
+Makefile.*
+*.o
+*.obj
+*.a
+*.so
+*.so.*
+*.lib
+*.app/
+*.dSYM/
+
+# Windows 构建产物；但仓库内随源码分发的 platform-tools 必须保留跟踪
+*.exe
+*.dll
+!QtAdb/Resources/platform-tools/*.exe
+!QtAdb/Resources/platform-tools/*.dll
+
+# ---- Qt 生成文件 ----
+moc_*.cpp
+moc_*.h
+moc_predefs.h
+ui_*.h
+qrc_*.cpp
+*.qm
+*_autogen/
+*_qrc.cpp
+
+# ---- IDE / 编辑器状态 ----
+*.pro.user
+*.pro.user.*
+*.aps
+*.user
+*.autosave
+.vscode/
+.idea/
+*.swp
+
+# ---- 运行期产物 ----
+core
+core.*
+*.log

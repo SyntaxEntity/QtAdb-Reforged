@@ -3,12 +3,12 @@
 
 #include <QWidget>
 #include <QGraphicsDropShadowEffect>
-#include "adbprocess.h"
 #include <QFileDialog>
 #include "../../threads/adbthread.h"
 #include <QScrollBar>
 #include <QFile>
 #include "../../animationwidget.h"
+#include "textexplainer.h"
 
 namespace Ui {
 class sp_installer;
@@ -26,8 +26,7 @@ public:
 
     void setDev(device dev);
 
-    adbProcess *process;
-    adbThread *thread;
+    adbThread *thread = nullptr;
 
     QString labelDisplay;
 
@@ -39,11 +38,10 @@ private slots:
     void stop_progressBar(QString);
 
 private:
-    Ui::sp_installer *ui;
+    Ui::sp_installer *ui = nullptr;
 
     QString apkPath;
     /*
-    QMovie *movie;
     QLabel *movieLable;*/
 };
 

@@ -1,15 +1,22 @@
 #include "btnemulator.h"
 #include "ui_btnemulator.h"
 
+#include <QLabel>
+#include <QPushButton>
+#include "adbclient.h"
+#include "textexplainer.h"
+#include "adbcommands.h"
+#include "uishadow.h"
+#include "uistyles.h"
+
 btnEmulator::btnEmulator(QWidget *parent) :
     animationWidget(parent),
     ui(new Ui::btnEmulator)
 {
     ui->setupUi(this);
     connect(this->ui->back_to_basePage,SIGNAL(clicked()),parent,SLOT(slot_destroySonPage()));
-    process = new adbProcess();
     explainer = new textExplainer();
-    this->setStyleSheet("QToolTip{border:1px solid #BDBDBD; background-color: #ffffff; color:rgba(117, 117, 117, 0.9);font-family: MiSans Medium; font-size:12px;border-radius:4px;}");
+    this->setStyleSheet(UiStyles::kToolTip);
 
 
     setStyles();
@@ -18,6 +25,8 @@ btnEmulator::btnEmulator(QWidget *parent) :
 btnEmulator::~btnEmulator()
 {
     delete ui;
+    // explainer 由本类 new，必须由本类释放（否则每次页面重建都泄漏一个）
+    delete explainer;
 }
 
 void btnEmulator::setDev(device device)
@@ -27,208 +36,202 @@ void btnEmulator::setDev(device device)
 
 void btnEmulator::on_btn_back_clicked()
 {
-    process->run("adb shell input keyevent 4", dev);
+    // 异步下发：原同步调用会让界面一直等到命令结束（挂起时最长 20s）
+    AdbClient::instance()->runForDevice(dev.addr, AdbCmd::inputKeyevent("4"));
 }
 
 void btnEmulator::on_btn_home_clicked()
 {
-    process->run("adb shell input keyevent 3", dev);
+    // 异步下发：原同步调用会让界面一直等到命令结束（挂起时最长 20s）
+    AdbClient::instance()->runForDevice(dev.addr, AdbCmd::inputKeyevent("3"));
 }
 
 void btnEmulator::on_btn_menu_clicked()
 {
-    process->run("adb shell input keyevent 82", dev);
+    // 异步下发：原同步调用会让界面一直等到命令结束（挂起时最长 20s）
+    AdbClient::instance()->runForDevice(dev.addr, AdbCmd::inputKeyevent("82"));
 }
 
 void btnEmulator::on_btn_changeWindow_clicked()
 {
-    process->run("adb shell input keyevent 187", dev);
+    // 异步下发：原同步调用会让界面一直等到命令结束（挂起时最长 20s）
+    AdbClient::instance()->runForDevice(dev.addr, AdbCmd::inputKeyevent("187"));
 }
 
 void btnEmulator::on_btn_power_clicked()
 {
-    process->run("adb shell input keyevent 26", dev);
+    // 异步下发：原同步调用会让界面一直等到命令结束（挂起时最长 20s）
+    AdbClient::instance()->runForDevice(dev.addr, AdbCmd::inputKeyevent("26"));
 }
 
 void btnEmulator::on_btn_volUp_clicked()
 {
-    process->run("adb shell input keyevent 24", dev);
+    // 异步下发：原同步调用会让界面一直等到命令结束（挂起时最长 20s）
+    AdbClient::instance()->runForDevice(dev.addr, AdbCmd::inputKeyevent("24"));
 }
 
 void btnEmulator::on_btn_volDown_clicked()
 {
-    process->run("adb shell input keyevent 25", dev);
+    // 异步下发：原同步调用会让界面一直等到命令结束（挂起时最长 20s）
+    AdbClient::instance()->runForDevice(dev.addr, AdbCmd::inputKeyevent("25"));
 }
 
 void btnEmulator::on_btn_mute_clicked()
 {
-    process->run("adb shell input keyevent 164", dev);
+    // 异步下发：原同步调用会让界面一直等到命令结束（挂起时最长 20s）
+    AdbClient::instance()->runForDevice(dev.addr, AdbCmd::inputKeyevent("164"));
 }
 
 void btnEmulator::on_btn_shoot_clicked()
 {
-    process->run("adb shell input keyevent 27", dev);
+    // 异步下发：原同步调用会让界面一直等到命令结束（挂起时最长 20s）
+    AdbClient::instance()->runForDevice(dev.addr, AdbCmd::inputKeyevent("27"));
 }
 
 void btnEmulator::on_btn_play_stop_clicked()
 {
-    process->run("adb shell input keyevent 85", dev);
+    // 异步下发：原同步调用会让界面一直等到命令结束（挂起时最长 20s）
+    AdbClient::instance()->runForDevice(dev.addr, AdbCmd::inputKeyevent("85"));
 }
 
 void btnEmulator::on_btn_stop_clicked()
 {
-    process->run("adb shell input keyevent 86", dev);
+    // 异步下发：原同步调用会让界面一直等到命令结束（挂起时最长 20s）
+    AdbClient::instance()->runForDevice(dev.addr, AdbCmd::inputKeyevent("86"));
 }
 
 void btnEmulator::on_last_clicked()
 {
-    process->run("adb shell input keyevent 88", dev);
+    // 异步下发：原同步调用会让界面一直等到命令结束（挂起时最长 20s）
+    AdbClient::instance()->runForDevice(dev.addr, AdbCmd::inputKeyevent("88"));
 }
 
 void btnEmulator::on_btn_play_clicked()
 {
-    process->run("adb shell input keyevent 126", dev);
+    // 异步下发：原同步调用会让界面一直等到命令结束（挂起时最长 20s）
+    AdbClient::instance()->runForDevice(dev.addr, AdbCmd::inputKeyevent("126"));
 }
 
 void btnEmulator::on_btn_pause_clicked()
 {
-    process->run("adb shell input keyevent 127", dev);
+    // 异步下发：原同步调用会让界面一直等到命令结束（挂起时最长 20s）
+    AdbClient::instance()->runForDevice(dev.addr, AdbCmd::inputKeyevent("127"));
 }
 
 void btnEmulator::on_btn_next_clicked()
 {
-    process->run("adb shell input keyevent 87", dev);
+    // 异步下发：原同步调用会让界面一直等到命令结束（挂起时最长 20s）
+    AdbClient::instance()->runForDevice(dev.addr, AdbCmd::inputKeyevent("87"));
 }
 
 void btnEmulator::on_btn_light_down_clicked()
 {
-    process->run("adb shell input keyevent 220", dev);
+    // 异步下发：原同步调用会让界面一直等到命令结束（挂起时最长 20s）
+    AdbClient::instance()->runForDevice(dev.addr, AdbCmd::inputKeyevent("220"));
 }
 
 void btnEmulator::on_btn_light_up_clicked()
 {
-    process->run("adb shell input keyevent 221", dev);
+    // 异步下发：原同步调用会让界面一直等到命令结束（挂起时最长 20s）
+    AdbClient::instance()->runForDevice(dev.addr, AdbCmd::inputKeyevent("221"));
 }
 
 void btnEmulator::on_btn_sleep_clicked()
 {
-    process->run("adb shell input keyevent 223", dev);
+    // 异步下发：原同步调用会让界面一直等到命令结束（挂起时最长 20s）
+    AdbClient::instance()->runForDevice(dev.addr, AdbCmd::inputKeyevent("223"));
 }
 
 void btnEmulator::on_btn_sleep2_clicked()
 {
-    process->run("adb shell input keyevent 276", dev);
+    // 异步下发：原同步调用会让界面一直等到命令结束（挂起时最长 20s）
+    AdbClient::instance()->runForDevice(dev.addr, AdbCmd::inputKeyevent("276"));
 }
 
 void btnEmulator::on_btn_delight_clicked()
 {
-    process->run("adb shell input keyevent 224", dev);
+    // 异步下发：原同步调用会让界面一直等到命令结束（挂起时最长 20s）
+    AdbClient::instance()->runForDevice(dev.addr, AdbCmd::inputKeyevent("224"));
 }
 
 void btnEmulator::on_btn_call_AI_clicked()
 {
-    process->run("adb shell input keyevent 231", dev);
+    // 异步下发：原同步调用会让界面一直等到命令结束（挂起时最长 20s）
+    AdbClient::instance()->runForDevice(dev.addr, AdbCmd::inputKeyevent("231"));
 }
 
 void btnEmulator::on_btn_hang_up_clicked()
 {
-    process->run("adb shell input keyevent 6", dev);
+    // 异步下发：原同步调用会让界面一直等到命令结束（挂起时最长 20s）
+    AdbClient::instance()->runForDevice(dev.addr, AdbCmd::inputKeyevent("6"));
 }
 
 void btnEmulator::on_btn_settings_clicked()
 {
-    process->run("adb shell input keyevent 176", dev);
+    // 异步下发：原同步调用会让界面一直等到命令结束（挂起时最长 20s）
+    AdbClient::instance()->runForDevice(dev.addr, AdbCmd::inputKeyevent("176"));
 }
 
 void btnEmulator::on_btn_contacts_clicked()
 {
-    process->run("adb shell input keyevent 207", dev);
+    // 异步下发：原同步调用会让界面一直等到命令结束（挂起时最长 20s）
+    AdbClient::instance()->runForDevice(dev.addr, AdbCmd::inputKeyevent("207"));
 }
 
 void btnEmulator::on_btn_phone_clicked()
 {
-    process->run("adb shell input keyevent 5", dev);
+    // 异步下发：原同步调用会让界面一直等到命令结束（挂起时最长 20s）
+    AdbClient::instance()->runForDevice(dev.addr, AdbCmd::inputKeyevent("5"));
 }
 
 void btnEmulator::on_btn_browser_clicked()
 {
-    process->run("adb shell input keyevent 64", dev);
+    // 异步下发：原同步调用会让界面一直等到命令结束（挂起时最长 20s）
+    AdbClient::instance()->runForDevice(dev.addr, AdbCmd::inputKeyevent("64"));
 }
 
 void btnEmulator::on_btn_music_clicked()
 {
-    process->run("adb shell input keyevent 209", dev);
+    // 异步下发：原同步调用会让界面一直等到命令结束（挂起时最长 20s）
+    AdbClient::instance()->runForDevice(dev.addr, AdbCmd::inputKeyevent("209"));
 }
 
 void btnEmulator::on_btn_calender_clicked()
 {
-    process->run("adb shell input keyevent 208", dev);
+    // 异步下发：原同步调用会让界面一直等到命令结束（挂起时最长 20s）
+    AdbClient::instance()->runForDevice(dev.addr, AdbCmd::inputKeyevent("208"));
 }
 
 void btnEmulator::on_btn_calc_clicked()
 {
-    process->run("adb shell input keyevent 210", dev);
+    // 异步下发：原同步调用会让界面一直等到命令结束（挂起时最长 20s）
+    AdbClient::instance()->runForDevice(dev.addr, AdbCmd::inputKeyevent("210"));
 }
 
 void btnEmulator::setShadow(QWidget* wgt)
 {
-    QGraphicsDropShadowEffect *shadowEffect_widget = new QGraphicsDropShadowEffect(this);
-    shadowEffect_widget->setOffset(0,0);
-    shadowEffect_widget->setColor(Qt::gray);
-    shadowEffect_widget->setBlurRadius(5);
-    wgt->setGraphicsEffect(shadowEffect_widget);
+    applyDropShadow(wgt);
 }
 
 void btnEmulator::setStyles()
 {
-    /*
-    QGraphicsDropShadowEffect *shadowEffect_widget = new QGraphicsDropShadowEffect();
-    shadowEffect_widget->setOffset(0,0);
-    shadowEffect_widget->setColor(Qt::gray);
-    shadowEffect_widget->setBlurRadius(5);
-    ui->widget->setGraphicsEffect(shadowEffect_widget);*/
+    // 原来逐个列举了 36 个控件（30 个按钮 + 6 个标签）来加阴影。那份清单必须与 .ui
+    // 手工保持一致：新增按钮忘了加、或改了 objectName，都不会报错，只是"这个按钮没阴影"。
+    // 改为遍历子控件后清单不复存在，新控件自动获得阴影。
+    // 覆盖集合由 --effects 探针核对：重构前后都是 30 个按钮 + 6 个标签。
+    for(QPushButton *button : findChildren<QPushButton *>())
+    {
+        setShadow(button);
+    }
+    for(QLabel *label : findChildren<QLabel *>())
+    {
+        setShadow(label);
+    }
 
-    setShadow(ui->btn_back);
-    setShadow(ui->btn_home);
-    setShadow(ui->btn_menu);
-    setShadow(ui->btn_changeWindow);
-    setShadow(ui->btn_power);
-    setShadow(ui->btn_volUp);
-    setShadow(ui->btn_volDown);
-    setShadow(ui->btn_mute);
-    setShadow(ui->btn_shoot);
-    setShadow(ui->btn_play_stop);
-    setShadow(ui->btn_stop);
-    setShadow(ui->last);
-    setShadow(ui->btn_play);
-    setShadow(ui->btn_pause);
-    setShadow(ui->btn_next);
-    setShadow(ui->btn_light_down);
-    setShadow(ui->btn_light_up);
-    setShadow(ui->btn_sleep);
-    setShadow(ui->btn_sleep2);
-    setShadow(ui->btn_delight);
-    setShadow(ui->btn_call_AI);
-    setShadow(ui->btn_hang_up);
-    setShadow(ui->btn_settings);
-    setShadow(ui->btn_contacts);
-    setShadow(ui->btn_phone);
-    setShadow(ui->btn_browser);
-    setShadow(ui->btn_music);
-    setShadow(ui->btn_calender);
-    setShadow(ui->btn_calc);
-    setShadow(ui->back_to_basePage);
-    setShadow(ui->tips);
-
-    setShadow(ui->label);
-    setShadow(ui->label_2);
-    setShadow(ui->label_3);
-    setShadow(ui->label_4);
-    setShadow(ui->label_5);
-
-    ui->label->setStyleSheet("border:0px;background-color:rgba(255,255,255,0.7);");
-    ui->label_2->setStyleSheet("border:0px;background-color:rgba(255,255,255,0.7);");
-    ui->label_3->setStyleSheet("border:0px;background-color:rgba(255,255,255,0.7);");
-    ui->label_4->setStyleSheet("border:0px;background-color:rgba(255,255,255,0.7);");
-    ui->label_5->setStyleSheet("border:0px;background-color:rgba(255,255,255,0.7);");
+    // 5 个说明标签的底色（原来同一行写了 5 遍）
+    const QList<QLabel *> noteLabels = { ui->label, ui->label_2, ui->label_3, ui->label_4, ui->label_5 };
+    for(QLabel *label : noteLabels)
+    {
+        label->setStyleSheet("border:0px;background-color:rgba(255,255,255,0.7);");
+    }
 }

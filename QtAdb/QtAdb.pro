@@ -1,27 +1,32 @@
 QT       += core gui
-QT += serialport
-QT += core5compat
 CONFIG += resources_big
 # QMAKE_LFLAGS += /MANIFESTUAC:\"level=\'requireAdministrator\' uiAccess=\'false\'\"
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
-CONFIG += c++11
+# Qt 6 强制要求 C++17；此前的 c++11 会让 Qt6 头文件直接报
+# qcompilerdetection.h: #error "Qt requires a C++17 compiler"
+CONFIG += c++17
 
 # You can make your code fail to compile if it uses deprecated APIs.
 # In order to do so, uncomment the following line.
 #DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0x060000    # disables all the APIs deprecated before Qt 6.0.0
 
 SOURCES += \
+    adbclient.cpp \
+    qssloader.cpp \
+    uishadow.cpp \
     about.cpp \
     abstract/comboboxlistwidget.cpp \
-    adbprocess.cpp \
     animationwidget.cpp \
     basepage.cpp \
+    devicenames.cpp \
+    devicenames.h \
     devitem.cpp \
     indexlistitem.cpp \
     main.cpp \
     mainwindow.cpp \
+    mainwindow_dialogs.cpp \
     monitor.cpp \
     noticewidget.cpp \
     pagelistitem.cpp \
@@ -53,15 +58,18 @@ SOURCES += \
     sonPages/standardoutputpage.cpp \
     textexplainer.cpp \
     threads/adbthread.cpp \
-    threads/thread_createpage.cpp \
     threads/thread_monitor.cpp \
     usb_listener.cpp \
     welcomepage.cpp
 
 HEADERS += \
+    adbclient.h \
+    adbcommands.h \
+    qssloader.h \
+    uishadow.h \
+    uistyles.h \
     about.h \
     abstract/comboboxlistwidget.h \
-    adbprocess.h \
     animationwidget.h \
     basepage.h \
     devitem.h \
@@ -98,7 +106,6 @@ HEADERS += \
     sonPages/standardoutputpage.h \
     textexplainer.h \
     threads/adbthread.h \
-    threads/thread_createpage.h \
     threads/thread_monitor.h \
     usb_listener.h \
     welcomepage.h
@@ -138,8 +145,11 @@ FORMS += \
     sonPages/standardoutputpage.ui \
     welcomepage.ui
 
+# 界面文案的源语言就是中文，因此不需要 zh_CN 翻译（原来这里指向的 QtAdb_zh_CN.ts 是空壳文件）。
+# 需要的是英文翻译，而且必须与 CMakeLists.txt 的 QTADB_TS_FILES 指向同一个 .ts ——
+# 这条约定由 .dsh/probe/check_build_sync.py 校验（两份构建描述的翻译列表必须一致）。
 TRANSLATIONS += \
-    QtAdb_zh_CN.ts
+    translations/QtAdb_en.ts
 CONFIG += lrelease
 CONFIG += embed_translations
 
@@ -154,4 +164,7 @@ RESOURCES += \
     ico.qrc \
     styles.qrc
 
-RC_FILE += logo.rc
+# ⚠ 隐式约定：SOURCES/HEADERS 列表与 CMakeLists.txt 的源文件列表必须保持一致
+#    （新增或删除源文件时两份都要改）。自测：校验脚本会比对两份列表与磁盘上的实际文件。
+# Windows 资源图标（RC_FILE 仅对 Windows 目标有意义）
+win32: RC_FILE += logo.rc

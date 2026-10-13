@@ -1,59 +1,47 @@
 #include "sp_activator.h"
 #include "ui_sp_activator.h"
+#include "qssloader.h"
+#include "adbclient.h"
+#include <QPointer>
+#include "textexplainer.h"
+#include "uishadow.h"
 
 sp_activator::sp_activator(QWidget *parent) :
     animationWidget(parent),
     ui(new Ui::sp_activator)
 {
     ui->setupUi(this);
-    process = new adbProcess;
-    parents = parent;
 
     //spg_return_pushed()
-    //connect(this->ui->back_to_basePage,SIGNAL(clicked()),parent,SLOT(slot_destroySonPage()));
     connect(this->ui->back_to_basePage,SIGNAL(clicked()),parent,SLOT(spg_return_pushed()));
 
-    QGraphicsDropShadowEffect *shadowEffect_runBtn = new QGraphicsDropShadowEffect(this);
-    QGraphicsDropShadowEffect *shadowEffect_showOutputBtn = new QGraphicsDropShadowEffect(this);
-    QGraphicsDropShadowEffect *shadowEffect_back_to_basePage = new QGraphicsDropShadowEffect(this);
-    QGraphicsDropShadowEffect *shadowEffect_refreshBtn = new QGraphicsDropShadowEffect(this);
 
-    shadowEffect_runBtn->setOffset(0,0);
-    shadowEffect_runBtn->setColor(Qt::gray);
-    shadowEffect_runBtn->setBlurRadius(5);
 
-    shadowEffect_showOutputBtn->setOffset(0,0);
-    shadowEffect_showOutputBtn->setColor(Qt::gray);
-    shadowEffect_showOutputBtn->setBlurRadius(5);
 
-    shadowEffect_back_to_basePage->setOffset(0,0);
-    shadowEffect_back_to_basePage->setColor(Qt::gray);
-    shadowEffect_back_to_basePage->setBlurRadius(5);
 
-    shadowEffect_refreshBtn->setOffset(0,0);
-    shadowEffect_refreshBtn->setColor(Qt::gray);
-    shadowEffect_refreshBtn->setBlurRadius(5);
 
-    ui->back_to_basePage->setGraphicsEffect(shadowEffect_back_to_basePage);
-    ui->runBtn->setGraphicsEffect(shadowEffect_runBtn);
-    ui->showOutputBtn->setGraphicsEffect(shadowEffect_showOutputBtn);
-    ui->refreshBtn->setGraphicsEffect(shadowEffect_refreshBtn);
 
-    QGraphicsDropShadowEffect *shadowEffect_textBrowser = new QGraphicsDropShadowEffect(this);
-    shadowEffect_textBrowser->setOffset(0,0);
-    shadowEffect_textBrowser->setColor(Qt::gray);
-    shadowEffect_textBrowser->setBlurRadius(5);
-    ui->textBrowser->setGraphicsEffect(shadowEffect_textBrowser);
 
-    QFile file("://qss/scrollbar.qss");
-    file.open(QFile::ReadOnly);
-    ui->textBrowser->verticalScrollBar()->setStyleSheet(file.readAll());
+
+
+
+    applyDropShadow(ui->textBrowser);
+    // 补回：第 48 轮的批量替换只删未加，丢掉了这一处阴影（见 §六十）
+    applyDropShadow(ui->back_to_basePage);
+    // 补回：第 48 轮的批量替换只删未加，丢掉了这一处阴影（见 §六十）
+    applyDropShadow(ui->runBtn);
+    // 补回：第 48 轮的批量替换只删未加，丢掉了这一处阴影（见 §六十）
+    applyDropShadow(ui->showOutputBtn);
+    // 补回：第 48 轮的批量替换只删未加，丢掉了这一处阴影（见 §六十）
+    applyDropShadow(ui->refreshBtn);
+
+    // 读取失败时给出警告并跳过（原实现不检查 QFile::open 的返回值）
+    applyScrollBarStyle(ui->textBrowser);
     ui->textBrowser->setTextInteractionFlags(Qt::NoTextInteraction);
 }
 
 sp_activator::~sp_activator()
 {
-    //delete process;
     if(page != NULL)
     {
         delete page;
@@ -62,7 +50,7 @@ sp_activator::~sp_activator()
     delete ui;
 }
 
-void sp_activator::setUp(QString qss, QString title, QString profile, QString cmd)
+void sp_activator::setUp(QString qss, QString title, QString profile, const QStringList &cmd)
 {
     ui->appIcon->setStyleSheet(qss);
     ui->appName->setText(title);
@@ -72,7 +60,18 @@ void sp_activator::setUp(QString qss, QString title, QString profile, QString cm
 
 void sp_activator::on_runBtn_clicked()
 {
-    process->run(command, dev);
+    // 异步下发；若输出窗口已打开，把命令输出转发给它。
+    // （原实现是同步执行、由 adbProcess::outputGet 驱动输出窗口；
+    //   adbProcess 删除后改为在回调里转发，功能不变。）
+    QPointer<standardOutputPage> pagePtr(page);
+    AdbClient::instance()->runForDeviceWithCallback(
+        dev.addr, command,
+        [pagePtr](int, const QString &output, const QString &errorOutput) {
+            if(pagePtr)
+            {
+                pagePtr->update(output + errorOutput);
+            }
+        });
 }
 
 void sp_activator::setDev(device device)
@@ -84,17 +83,17 @@ void sp_activator::on_showOutputBtn_clicked(bool checked)
 {
     if(checked)
     {
-        page = new standardOutputPage(NULL,process);
-        page->setWindowTitle("命令行输出");
-        connect(process,SIGNAL(outputGet(QString)),page,SLOT(update(QString)));
-        /*
-        parents->mapToGlobal(parents->pos());
-        page->move(parents->pos().x() + parents->width() + this->width()/2 + 22,0);*/
-        //page->setWindowFlags(Qt::FramelessWindowHint);parents->pos().x() + parents->width() +this->width() + 22
+        page = new standardOutputPage(NULL);
+        page->setWindowTitle(tr("命令行输出"));
         page->show();
     }
-    else
+    else if(page != nullptr)
     {
-        page->~standardOutputPage();
+        // 原实现为 page->~standardOutputPage(); —— 在堆对象上显式调用析构函数，
+        // 而 ~sp_activator() 还会 delete page，导致 delete ui 被执行两次（双重析构）。
+        // 正确做法：隐藏后交给事件循环延迟删除，并立即置空以断开成员引用。
+        page->hide();
+        page->deleteLater();
+        page = nullptr;
     }
 }

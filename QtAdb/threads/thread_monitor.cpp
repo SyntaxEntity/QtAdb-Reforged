@@ -1,81 +1,135 @@
 #include "thread_monitor.h"
+#include "../adbclient.h"
+
+#include <QPointer>
+#include <QTimer>
+#include "textexplainer.h"
+#include "adbcommands.h"
+
+namespace {
+constexpr int kSampleIntervalMs = 2000;   // 采样周期（与原来的定时器/线程一致）
+}
 
 thread_monitor::thread_monitor(device d)
+    : dev(d)
 {
-    //Debug() << "******************************************" << dev.addr;
-    process = new adbProcess();
-    explainer = new textExplainer();
-    dev = d;
-    //timer = new QTimer(this);
-    //connect(timer,SIGNAL(timeout()),this,SLOT(getInfo()));
-    //adb shell cat /proc/meminfo
-    //adb shell cat proc/stat
+    m_timer = new QTimer(this);
+    m_timer->setInterval(kSampleIntervalMs);
+    connect(m_timer, &QTimer::timeout, this, &thread_monitor::onTimer);
 }
 
-void thread_monitor::run()
-{
-    process->thread = true;
-    //timer->start(1000);
-    /*
-    while(true)
-    {
+thread_monitor::~thread_monitor() = default;
 
-    }*/
+void thread_monitor::start()
+{
+    if(m_timer->isActive())
+    {
+        return;
+    }
+    m_timer->start();
+    onTimer();          // 立即采样一次，缩短首屏等待
 }
 
-void thread_monitor::getInfo()
+void thread_monitor::stop()
 {
-    //qDebug() << ">> getInfo()";
-    cpu_t2 = process->run("adb shell cat proc/stat", dev);
-    mem = process->run("adb shell cat /proc/meminfo",dev);
+    m_timer->stop();
+    emit finished();
+}
 
-    //qDebug() << "cpu_t2 =" << cpu_t2;
-    //qDebug() << mem;
-
-    if(cpu_t1 != "#FIRSTBOOT#" && !cpu_t2.isEmpty() && !mem.isEmpty())
+void thread_monitor::onTimer()
+{
+    if(m_samplePending)
     {
-        //qDebug() << "before, cpu_t1 = " <<cpu_t1;
-        QStringList list_t2 = cpu_t2.split("\n")[0].split(" ");
-        list_t2.removeAll("");
-        QStringList list_t1 = cpu_t1.split("\n")[0].split(" ");
-        list_t1.removeAll("");
-        //qDebug() << "list_t2[1].toInt() = " << list_t2[1].toInt();
-        //qDebug() << "list_t1[1].toInt() = " << list_t1[1].toInt();
-        int timeTotal_t2 = list_t2[1].toInt() + list_t2[2].toInt() + list_t2[3].toInt() + list_t2[4].toInt() + list_t2[5].toInt() + list_t2[6].toInt() + list_t2[7].toInt();
-        //qDebug() << "timeTotal_t2 = " <<timeTotal_t2;
-        int timeTotal_t1 = list_t1[1].toInt() + list_t1[2].toInt() + list_t1[3].toInt() + list_t1[4].toInt() + list_t1[5].toInt() + list_t1[6].toInt() + list_t1[7].toInt();
-        //qDebug() << "timeTotal_t1 = " <<timeTotal_t1;
-        //qDebug() << "total complete";
-        int timeIdle_t2 = list_t2[4].toInt();
-        //qDebug() << "timeIdle_t2 = " <<timeIdle_t2;
-        int timeIdle_t1 = list_t1[4].toInt();
-        //qDebug() << "timeIdle_t1 = " <<timeIdle_t1;
-        //qDebug() << "idle complete";
-
-        float cpu_use = 1 - ((float)(timeIdle_t2 - timeIdle_t1) / (float)(timeTotal_t2 - timeTotal_t1));
-        qDebug() << "cpu_use = " << cpu_use;
-        cpu_t1 = cpu_t2;
-        cpu_t2 = "";
-
-        int MemTotal = explainer->get_words_before(explainer->get_words_after(mem.split("\n")[0] , "MemTotal:") , "kB").simplified().simplified().toInt();
-        //int MemFree = explainer->get_words_before(explainer->get_words_after(mem.split("\n")[1] , "MemFree:") , "kB").simplified().simplified().toInt();
-        int MemAvailable = explainer->get_words_before(explainer->get_words_after(mem.split("\n")[2] , "MemAvailable:") , "kB").simplified().simplified().toInt();
-        //qDebug() << "Mem = " << mem;
-        //qDebug() << "MemTotal = " << MemTotal;
-        //qDebug() << "MemFree = " << MemFree;
-        //float mem_use = (float)(MemTotal - MemFree) / (float)MemTotal;
-        float mem_use = (float)(MemTotal - MemAvailable) / (float)MemTotal;
-
-        qDebug() << "mem_use = " << mem_use;
-
-        mem = "";
-        emit signal_monitor(cpu_use, mem_use);
+        return;         // 设备较慢时不堆积请求
     }
-    else
+    m_samplePending = true;
+
+    // 两条命令有依赖关系（第二个回调里要用到第一个的输出），因此嵌套回调。
+    // 全部经由 AdbClient 异步执行，不阻塞界面。
+    // Explain::No：周期采样属于取数命令，不弹"解释"提示框。
+    QPointer<thread_monitor> self(this);
+    // 必须用 runForDeviceWithCallback 带上 -s <序列号>：
+    // 原实现用了不带设备的 runWithCallback，多设备时命令行没有 -s，
+    // adb 会挑"默认设备"（多台时直接报 more than one device），
+    // 于是 CPU/内存可能取自另一台设备。ADB 层所有设备相关请求都要带 -s。
+    AdbClient::instance()->runForDeviceWithCallback(
+        dev.addr, AdbCmd::cat("proc/stat"),
+        [self](int, const QString &cpuNow, const QString &) {
+            if(!self)
+            {
+                return;
+            }
+            QPointer<thread_monitor> nested = self;
+            AdbClient::instance()->runForDeviceWithCallback(
+                nested->dev.addr, AdbCmd::cat("/proc/meminfo"),
+                [nested, cpuNow](int, const QString &memInfo, const QString &) {
+                    if(!nested)
+                    {
+                        return;
+                    }
+                    nested->m_samplePending = false;
+                    nested->computeAndEmit(cpuNow, memInfo);
+                },
+                AdbClient::kDefaultTimeoutMs,
+                AdbClient::Explain::No);
+        },
+        AdbClient::kDefaultTimeoutMs,
+        AdbClient::Explain::No);
+}
+
+void thread_monitor::computeAndEmit(const QString &cpuNow, const QString &memInfo)
+{
+    // 首次采样（或上次没有有效基准）只用于建立基准
+    if(m_firstSample || m_cpuPrevious.isEmpty() || cpuNow.isEmpty() || memInfo.isEmpty())
     {
-        //qDebug() << "cpu_t2.isEmpty?" << cpu_t2.isEmpty();
-        //qDebug() << "mem.isEmpty?" << mem.isEmpty();
-        cpu_t1 = process->run("adb shell cat proc/stat", dev);
+        m_cpuPrevious = cpuNow;
+        m_firstSample = false;
+        return;
     }
-    //cpu_t1 = "";
+
+    QStringList listNow = cpuNow.split("\n")[0].split(" ");
+    listNow.removeAll("");
+    QStringList listPrev = m_cpuPrevious.split("\n")[0].split(" ");
+    listPrev.removeAll("");
+
+    m_cpuPrevious = cpuNow;     // 解析失败也要推进基准，否则会一直拿同一次采样比较
+
+    // 只有形如 "cpu user nice system idle iowait irq softirq" 才能安全取到下标 7
+    if(listNow.size() < 8 || listPrev.size() < 8)
+    {
+        return;
+    }
+
+    const int totalNow = listNow[1].toInt() + listNow[2].toInt() + listNow[3].toInt()
+                       + listNow[4].toInt() + listNow[5].toInt() + listNow[6].toInt()
+                       + listNow[7].toInt();
+    const int totalPrev = listPrev[1].toInt() + listPrev[2].toInt() + listPrev[3].toInt()
+                        + listPrev[4].toInt() + listPrev[5].toInt() + listPrev[6].toInt()
+                        + listPrev[7].toInt();
+    const int idleNow = listNow[4].toInt();
+    const int idlePrev = listPrev[4].toInt();
+
+    // 两次采样的总时间差为 0（计数器未推进或回绕）时不能做除法
+    if(totalNow <= totalPrev)
+    {
+        return;
+    }
+
+    const float cpuUse = 1.0f - (float)(idleNow - idlePrev) / (float)(totalNow - totalPrev);
+
+    // /proc/meminfo 至少需要前 3 行（MemTotal / MemFree / MemAvailable）
+    const QStringList memLines = memInfo.split("\n");
+    if(memLines.size() < 3)
+    {
+        return;
+    }
+
+    const int memTotal = m_explainer.get_words_before(m_explainer.get_words_after(memLines[0], "MemTotal:"), "kB").simplified().toInt();
+    const int memAvailable = m_explainer.get_words_before(m_explainer.get_words_after(memLines[2], "MemAvailable:"), "kB").simplified().toInt();
+
+    if(memTotal <= 0)
+    {
+        return;     // 解析失败时防止除零
+    }
+    emit signal_monitor(cpuUse, (float)(memTotal - memAvailable) / (float)memTotal);
 }

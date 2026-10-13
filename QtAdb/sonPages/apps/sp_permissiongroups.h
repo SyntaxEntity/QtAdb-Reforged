@@ -9,6 +9,7 @@
 #include <QScrollBar>
 #include <QFile>
 #include "../../animationwidget.h"
+#include "textexplainer.h"
 
 namespace Ui {
 class sp_permissionGroups;
@@ -32,9 +33,10 @@ public slots:
     void refresh_tableView(QString);
 
 private:
-    Ui::sp_permissionGroups *ui;
-    adbThread *thread;
-    textExplainer *explainer;
+    Ui::sp_permissionGroups *ui = nullptr;
+    adbThread *thread = nullptr;
+    // 值成员：原先这里是未初始化的裸指针，解引用属未定义行为
+    textExplainer explainer;
 };
 
 #endif // SP_PERMISSIONGROUPS_H

@@ -27,7 +27,7 @@ public:
 
     device dev;
     void setDev(device dev);
-    QWidget *pa;
+    QWidget *pa = nullptr;
 
 private slots:
     void on_back_to_basePage_2_clicked();
@@ -39,29 +39,36 @@ private slots:
 
 public slots:
     void refresh_tableView(QString);
+    // 三种呈现方式（原来都写在 refresh_tableView 里）
+    void fillGroupedTable(const QString &s);    // 按组整理（Mode::Grouped）
+    void fillFilteredTable(const QString &s);   // 输出所有信息（Mode::Filtered）
 
 private:
-    Ui::sp_permissions *ui;
+    Ui::sp_permissions *ui = nullptr;
     QString arg = "";
 
-    QStandardItemModel* current_model;
-    adbThread *thread;
-    textExplainer *explainer;
+    // 呈现方式。原来用 5 个互斥布尔量表示，其中 arg_s / arg_d / arg_u 只写不读；
+    // 分派只看"按组 / 过滤 / 其余"三种，故收成三值枚举。
+    enum class Mode { Other, Grouped, Filtered };
+    Mode mode = Mode::Other;
 
-    bool arg_g = false;
-    bool arg_f = false;
-    bool arg_s = false;
-    bool arg_d = false;
-    bool arg_u = false;
+    // 必须初始化：on_open_another_window_clicked() 会把它交给 QTableView::setModel()，
+    // 而列表刷新是异步的，用户可能在刷新完成前点击“查看”，
+    // 原实现传入未初始化的野指针 → 崩溃。
 
-    QDialog *settings;
-    QButtonGroup *group;
-    QRadioButton *btn_g;
-    QRadioButton *btn_f;
-    QRadioButton *btn_s;
-    QRadioButton *btn_d;
-    QRadioButton *btn_u;
-    QPushButton *closeBtn;
+    adbThread *thread = nullptr;
+
+
+    // 必须初始化：这些成员在首次点击“选项”时才被创建，
+    // 而释放旧对话框时要先判断指针有效性（原实现为未初始化裸指针）。
+    QDialog *settings = nullptr;
+    QButtonGroup *group = nullptr;
+    QRadioButton *btn_g = nullptr;
+    QRadioButton *btn_f = nullptr;
+    QRadioButton *btn_s = nullptr;
+    QRadioButton *btn_d = nullptr;
+    QRadioButton *btn_u = nullptr;
+    QPushButton *closeBtn = nullptr;
 
     void generalMode(QString s);
 };

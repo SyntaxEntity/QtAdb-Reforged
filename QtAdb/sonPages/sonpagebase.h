@@ -15,11 +15,9 @@ public:
     explicit sonPageBase(QWidget *parent = nullptr);
     ~sonPageBase();
 
-    QWidget *parents;
-    void setTitle(QString title);
 
 private:
-    Ui::sonPageBase *ui;
+    Ui::sonPageBase *ui = nullptr;
 };
 
 #endif // SONPAGEBASE_H

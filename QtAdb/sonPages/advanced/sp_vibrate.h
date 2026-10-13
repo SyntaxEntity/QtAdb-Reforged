@@ -6,9 +6,9 @@
 #include <QRegularExpressionValidator>
 #include <QFile>
 //#include <QRegularExpressionValidator>
-#include "../../adbprocess.h"
 #include "../../threads/adbthread.h"
 #include "../../animationwidget.h"
+#include "textexplainer.h"
 
 
 namespace Ui {
@@ -27,14 +27,18 @@ public:
     void setDev(device dev);
 
 private:
-    Ui::sp_vibrate *ui;
+    Ui::sp_vibrate *ui = nullptr;
 
 
-    adbProcess *process;
-    textExplainer *explainer;
+    textExplainer *explainer = nullptr;
 
     void setShadow(QWidget* wgt);
     void refresh();
+    // 读一个 system settings 键并回填到对应槽（refresh() 里的 10 个请求共用）
+    void requestSetting(const QString &systemKey, void (sp_vibrate::*slot)(QString));
+
+    // 校验输入后再下发设置（10 个按钮共用）
+    bool applySetting(const QString &key, class QLineEdit *edit);
 
 
 private slots:

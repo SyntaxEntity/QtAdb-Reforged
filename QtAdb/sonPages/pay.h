@@ -16,7 +16,7 @@ public:
     ~pay();
 
 private:
-    Ui::pay *ui;
+    Ui::pay *ui = nullptr;
 };
 
 #endif // PAY_H

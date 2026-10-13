@@ -1,4 +1,5 @@
 #include "mainwindow.h"
+#include "adbclient.h"
 
 #include <QApplication>
 #include <QLocale>
@@ -9,33 +10,27 @@
 #include <QFont>
 #include <QSplashScreen>
 #include <QThread>
-#include <Windows.h>
 
 int main(int argc, char *argv[])
 {
-    //QTextCodec::setCodecForLocale(QTextCodec::codecForName("GB2312"));
 
     QApplication a(argc, argv);
 
-    /*
-    QFont font;
-    int index = QFontDatabase::addApplicationFont(":/fonts/fonts/MiSans-Normal.ttf");*/
 
-    QFontDatabase::addApplicationFont(":/LXGW/LXGWWenKaiLite-Regular.ttf");
+    // 用 addApplicationFont() 的返回值取真实字体族名。
+    // 原实现忽略返回值、并把族名硬编码成 "LXGW WenKai Lite"：一旦资源改名或字体内部
+    // 族名不同，程序就会去用一个不存在的字体族（静默回退到系统字体，且没有任何提示）。
+    const int fontId = QFontDatabase::addApplicationFont(QStringLiteral(":/LXGW/LXGWWenKaiLite-Regular.ttf"));
+    const QStringList fontFamilies = QFontDatabase::applicationFontFamilies(fontId);
 
-    /*
-    if (index != -1)
+    if(!fontFamilies.isEmpty())
     {
-        QStringList fontList(QFontDatabase::applicationFontFamilies(index));
-        if (fontList.count() > 0)
-        {
-            font.setFamily(fontList.at(0));
-            font.setBold(false);
-        }
+        a.setFont(QFont(fontFamilies.first()));
     }
-
-    a.setFont(font);*/
-    a.setFont(QFont("LXGW WenKai Lite"));
+    else
+    {
+        qWarning() << "内置字体加载失败，将使用系统默认字体";
+    }
     a.setStyleSheet("QToolTip{border:1px solid #BDBDBD; background-color: #ffffff; color:rgba(117, 117, 117, 0.9);font-family: 'LXGW WenKai Lite'; font-size:12px;border-radius:4px;}");
 
 
@@ -54,7 +49,6 @@ int main(int argc, char *argv[])
     splash.setBaseSize(100,100);
     splash.setMaximumSize(100,100);
     splash.show();
-    //Sleep(5000);
     a.processEvents();
 
 
@@ -63,5 +57,11 @@ int main(int argc, char *argv[])
 
     splash.finish(&w);
 
-    return a.exec();
+    const int exitCode = a.exec();
+
+    // 退出前显式收口：清空请求队列与在途请求、终止子进程。
+    // 不这样做的话，退出瞬间仍在途的请求会把它持有的回调与参数留到进程结束。
+    AdbClient::instance()->shutdown();
+
+    return exitCode;
 }

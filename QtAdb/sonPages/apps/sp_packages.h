@@ -5,18 +5,17 @@
 #include <QWidget>
 #include <QGraphicsDropShadowEffect>
 #include <QStandardItemModel>
-#include "adbprocess.h"
 #include <QFileDialog>
 #include "../../threads/adbthread.h"
 #include "tp_packageprofile.h"
 #include <QScrollBar>
 #include <QFile>
 #include "../../animationwidget.h"
+#include "textexplainer.h"
 
 /*
 struct package
 {
-    QString package_name;
 };*/
 
 namespace Ui {
@@ -34,9 +33,8 @@ public:
     device dev;
     void setDev(device dev);
 
-    QWidget *pa;
+    QWidget *pa = nullptr;
 
-    QString current_package = "";
 
 private slots:
     void on_refreshBtn_clicked();
@@ -48,9 +46,10 @@ public slots:
     void refresh_tableView(QString);
 
 private:
-    Ui::sp_packages *ui;
-    adbThread *thread;
-    textExplainer *explainer;
+    Ui::sp_packages *ui = nullptr;
+    adbThread *thread = nullptr;
+    // 值成员：原先这里是未初始化的裸指针，解引用属未定义行为
+    textExplainer explainer;
 
     QString arg = "";
 };

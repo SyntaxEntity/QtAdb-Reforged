@@ -1,114 +1,140 @@
 #include "adbthread.h"
+#include "../adbclient.h"
+
+#include <QPointer>
+#include "textexplainer.h"
+
+#include <QDebug>
 
 adbThread::adbThread(QObject* parent)
+    : QObject(parent)
 {
-    setParent(parent);
 }
+
+adbThread::~adbThread() = default;
 
 void adbThread::initThread(QString cmd, device d)
 {
     command = cmd;
+    m_arguments.clear();
     dev = d;
     explain = false;
 }
 
 void adbThread::initThread_timer(QString cmd, device d)
 {
-    //refreshTimer = new QTimer(this);
-    //connect(process,SIGNAL(finished(int,QProcess::ExitStatus)),this,SLOT(updateResult(int,QProcess::ExitStatus)));
     command = cmd;
+    m_arguments.clear();
     dev = d;
     explain = false;
-    //timer = true;
 }
 
 void adbThread::initThread(QString cmd, device d, QString key)
 {
-    //qDebug() << "d = " << d.model <<cmd << key;
     command = cmd;
+    m_arguments.clear();
     dev = d;
-    //qDebug() << "dev = " << dev.model;
     explain = true;
     explainKey = key;
 }
 
-void adbThread::run()
+void adbThread::initThread(const QStringList &arguments, device d)
 {
-    process = new adbProcess();
-    process->thread = true;
-    //qDebug() << "explainKey is " << explainKey;
-    //sleep(3);
-    /*
-    if(timer == true)
+    command.clear();
+    m_arguments = arguments;
+    dev = d;
+    explain = false;
+}
+
+void adbThread::initThread(const QStringList &arguments, device d, QString key)
+{
+    command.clear();
+    m_arguments = arguments;
+    dev = d;
+    explain = true;
+    explainKey = key;
+}
+
+QStringList adbThread::buildArguments() const
+{
+    // 前置 "-s <serial>"（与迁移前的 adbProcess::run(command, dev) 一致）
+    QStringList arguments;
+    arguments << QStringLiteral("-s") << dev.addr;
+
+    if(!m_arguments.isEmpty())
     {
-        qDebug() << "oid adbThread::run()-timer == true";
-        connect(refreshTimer,SIGNAL(animationEnd()),this,SLOT(sendResult()));
-        connect(process, SIGNAL(readyReadStandardOutput()), this, SLOT(updateResult()));
-        process->run_contains_empty(command,dev);
-        refreshTimer->start(200);
+        // 参数表形式：直接用，不经过字符串切分
+        arguments += m_arguments;
+        return arguments;
     }
-    else
-    {*/
-        if(explain == false)
-        {
-            QString output = process->run(command,dev).simplified();
-            emit signal_output(output);
-            exit();
-            //exec();
-        }
 
-        else if(explainKey == "#CPU#")
-        {
-            QString output = explainer->explain_cpu_output(process->run(command, dev));
-            emit signal_output(output);
-            exit();
-        }
+    // 整条命令串形式（#INSTALL#/#SIDELOAD# 的含空格路径仍走这里）：
+    // #INSTALL# / #SIDELOAD# 用 "~" 作分隔符，其余用 "'"；并弹出命令串里的 "adb"（下标 2）。
+    const bool hasSpacedPath = (explainKey == QLatin1String("#INSTALL#")
+                                || explainKey == QLatin1String("#SIDELOAD#"));
+    const QString separator = hasSpacedPath ? QStringLiteral("~") : QStringLiteral("'");
 
-        else if(explainKey == "#PERMISSIONGROUPS#")
-        {
-            //qDebug() << "dev = " << &dev;
-            QString output = process->run(command, dev);
-            //qDebug() << "output = " << output;
-            emit signal_output(output);
-            exit();
-        }
+    arguments += AdbClient::tokenizeCommand(command, separator);
 
-        else if(explainKey == "#INSTALL#")
-        {
-            connect(process,SIGNAL(outputGet(QString)),this,SLOT(result(QString)));
-            /*QString output = */process->run_contains_empty(command, dev);
-            //emit signal_output(output);
-            exit();
-        }
-
-        else if(explainKey == "#SIDELOAD#")
-        {
-            connect(process,SIGNAL(outputGet(QString)),this,SLOT(result(QString)));
-            /*QString output = */process->run_contains_empty(command, dev);
-            //emit signal_output(output);
-            exit();
-        }
-
-        else if(explain == true && explainKey != "#CPU#")
-        {
-            QString output = explainer->get_words_after(process->run(command, dev), explainKey);
-            emit signal_output(output);
-            exit();
-        }
-    //}
+    if(arguments.size() > 2)
+    {
+        arguments.removeAt(2);      // 弹出 "adb"
+    }
+    return arguments;
 }
 
-void adbThread::result(QString str)
+void adbThread::start()
 {
-    emit signal_output(str);
+    // 用 QPointer 保护：请求返回前对象可能已被销毁（例如页面已关闭）
+    QPointer<adbThread> self(this);
+    // Explain::No：本类对应原来的后台线程路径（adbProcess::thread = true），
+    // 取数类命令不弹"解释"提示框。
+    AdbClient::instance()->runWithCallback(
+        buildArguments(),
+        [self](int, const QString &output, const QString &) {
+            if(self)
+            {
+                self->deliver(output);
+            }
+        },
+        AdbClient::kDefaultTimeoutMs,
+        AdbClient::Explain::No);
 }
 
-void adbThread::updateResult(int,QProcess::ExitStatus)
+void adbThread::deliver(const QString &output)
 {
-    str_result = "#STD_OUT_PUT#:\n" + process->readAllStandardOutput() + "#STD_ERR#:\n" + process->readAllStandardError();
-}
+    // 以下分支与迁移前 adbThread::run() 的输出处理保持一致
+    if(explain == false)
+    {
+        emit signal_output(output.simplified());
+    }
+    else if(explainKey == QLatin1String("#CPU#"))
+    {
+        emit signal_output(m_explainer.explain_cpu_output(output));
+    }
+    else if(explainKey == QLatin1String("#PERMISSIONGROUPS#"))
+    {
+        emit signal_output(output);
+    }
+    else if(explainKey == QLatin1String("#INSTALL#") || explainKey == QLatin1String("#SIDELOAD#"))
+    {
+        emit signal_output(output);
+    }
+    else if(explain == true)
+    {
+        // 兜底：把 explainKey 当作"分隔符"用（例如屏幕分辨率那项传的是 ": "），
+        // 取分隔符之后的内容作为要显示的说明。
+        //
+        // 但解释键的集合是【封闭】的：只有上面三个分支里的四种。若传进来的形如
+        // #XXX# 却不在这四种里，多半是键写错了、或新增了键却忘了在这里登记 ——
+        // 那种"静默不解释"最难排查，所以留一条警告。
+        if(explainKey.startsWith(QLatin1Char('#')) && explainKey.endsWith(QLatin1Char('#'))
+           && explainKey.size() > 2)
+        {
+            qWarning() << "未登记的解释键（该输出不会被解释）:" << explainKey;
+        }
+        emit signal_output(m_explainer.get_words_after(output, explainKey));
+    }
 
-void adbThread::sendResult()
-{
-    emit regularResult(str_result);
+    emit finished();
 }

@@ -4,7 +4,6 @@
 #include <QWidget>
 #include <QGraphicsDropShadowEffect>
 #include "textexplainer.h"
-#include "adbprocess.h"
 #include "../../animationwidget.h"
 
 namespace Ui {
@@ -19,8 +18,7 @@ public:
     explicit sp_devControl_power(QWidget *parent = nullptr);
     ~sp_devControl_power();
 
-    adbProcess* process;
-    textExplainer* explainer;
+    textExplainer* explainer = nullptr;
     device dev;
     void setDev(device device);
 
@@ -34,7 +32,7 @@ private slots:
     void on_btn_rebootToFastboot_clicked();
 
 private:
-    Ui::sp_devControl_power *ui;
+    Ui::sp_devControl_power *ui = nullptr;
 };
 
 #endif // SP_DEVCONTROL_POWER_H

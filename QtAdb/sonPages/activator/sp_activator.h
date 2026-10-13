@@ -5,7 +5,7 @@
 #include <QGraphicsDropShadowEffect>
 #include <QScrollBar>
 #include <QFile>
-#include "adbprocess.h"
+#include "../../textexplainer.h"      // device 类型（原先由 adbprocess.h 传递包含）
 #include "../sonpagebase.h"
 #include "../standardoutputpage.h"
 #include "../../animationwidget.h"
@@ -22,11 +22,11 @@ public:
     explicit sp_activator(QWidget *parent = nullptr);
     ~sp_activator();
 
-    void setUp(QString qss, QString title, QString profile, QString command);
-    QString command;
+    void setUp(QString qss, QString title, QString profile, const QStringList &command);
+    // 要执行的命令（参数表形式，由 AdbCmd:: 构造）
+    QStringList command;
     device dev;
     standardOutputPage *page = NULL;
-    QWidget *parents;
 
     void setDev(device device);
 
@@ -36,9 +36,8 @@ private slots:
     void on_showOutputBtn_clicked(bool checked);
 
 private:
-    Ui::sp_activator *ui;
+    Ui::sp_activator *ui = nullptr;
 
-    adbProcess *process;
 };
 
 #endif // SP_ACTIVATOR_H

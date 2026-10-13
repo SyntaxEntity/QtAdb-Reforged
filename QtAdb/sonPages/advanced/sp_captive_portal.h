@@ -9,6 +9,7 @@
 #include <QScrollBar>
 #include <QFile>
 #include "../../animationwidget.h"
+#include "textexplainer.h"
 
 namespace Ui {
 class sp_captive_portal;
@@ -35,10 +36,9 @@ private slots:
     void on_restore_clicked();
 
 private:
-    Ui::sp_captive_portal *ui;
+    Ui::sp_captive_portal *ui = nullptr;
 
-    adbProcess *process;
-    textExplainer *explainer;
+    textExplainer *explainer = nullptr;
     void setShadow(QWidget* wgt);
 };
 

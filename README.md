@@ -200,8 +200,32 @@ Android 系统的可玩性在 adb 的加成下变得更加丰富，由此涌现�
 
 ## 构建
 
+工程同时提供 **CMake** 与 **qmake** 两套等价的构建描述（`QtAdb/CMakeLists.txt` 与 `QtAdb/QtAdb.pro`）。
+
+### CMake（推荐，Windows / Linux 通用）
+
+要求：Qt **6.2+**（C++17）、CMake **3.21+**、Ninja 或 Make。
+
+```bash
+cmake -S QtAdb -B build -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_PREFIX_PATH=/path/to/Qt/6.x.x/gcc_64
+cmake --build build -j
+```
+
+- 仅依赖 `Qt6::Widgets`；**嵌入**资源（`.qrc` 列出的 128 个文件）合计 **2.7 MiB**，已使用 `qt_add_big_resources` 处理。
+- 另有 `QtAdb/Resources`（约 14 MB，含 `platform-tools`）**不会被嵌入**，而是在构建时复制到可执行文件目录（见下一条）。
+- Windows 构建会自动把 `QtAdb/Resources`（含 `platform-tools`）复制到可执行文件目录，
+  与 `MainWindow::initEnvironmentPATH()` 的查找约定一致。
+
+### qmake（原有方式）
+
 - 建议使用 Qt 6.2.4 版本，Kit 请选择 MinGW 。
 - 运行环境将在 mainwindow 类构造时被更改至 ./Resources/platform-tools 请确保 debug 或 release 时，Resources文件夹位于正确的位置。
+
+> 说明：两套构建描述都已固定为 **C++17**（`QtAdb.pro` 的 `CONFIG += c++17` 与
+> `CMakeLists.txt` 的 `CMAKE_CXX_STANDARD 17`），无需再手工改动。
+> （早期版本的 `QtAdb.pro` 曾是 `CONFIG += c++11`，与 Qt 6 冲突，需要删除该行 —— 现已修正。）
+
 
 
 

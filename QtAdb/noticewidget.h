@@ -18,16 +18,16 @@ public:
     explicit noticeWidget(QWidget *parent = nullptr);
     ~noticeWidget();
 
-    QPropertyAnimation *animation;
+    QPropertyAnimation *animation = nullptr;
 
     void popUp(QString);
-    QTimer *timer;
+    QTimer *timer = nullptr;
 
 
 
 
 private:
-    Ui::noticeWidget *ui;
+    Ui::noticeWidget *ui = nullptr;
 
 private slots:
     void timeUp();

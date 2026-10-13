@@ -3,11 +3,11 @@
 
 #include <QWidget>
 #include <QGraphicsDropShadowEffect>
-#include "adbprocess.h"
 #include "../standardoutputpage.h"
 #include "../../threads/adbthread.h"
 #include <QFileDialog>
 #include "../../animationwidget.h"
+#include "textexplainer.h"
 
 namespace Ui {
 class sp_recovery;
@@ -25,8 +25,7 @@ public:
 
     void setDev(device dev);
 
-    adbProcess *process;
-    adbThread * thread;
+    adbThread * thread = nullptr;
 
     QString labelDisplay;
 
@@ -40,19 +39,13 @@ private slots:
     void updateProgress(QString);
 
 private:
-    Ui::sp_recovery *ui;
+    Ui::sp_recovery *ui = nullptr;
 
     QString zipPath;
 
     standardOutputPage *page = NULL;
 
-    QGraphicsDropShadowEffect *shadowEffect_runBtn;
-    QGraphicsDropShadowEffect *shadowEffect_showOutputBtn;
-    QGraphicsDropShadowEffect *shadowEffect_back_to_basePage;
-    QGraphicsDropShadowEffect *shadowEffect_refreshBtn;
-    QGraphicsDropShadowEffect *shadowEffect_selectBtn;
-    QGraphicsDropShadowEffect *shadowEffect_output;
-    QGraphicsDropShadowEffect *shadowEffect_tips;
+    QGraphicsDropShadowEffect *shadowEffect_tips = nullptr;
 };
 
 #endif // SP_RECOVERY_H

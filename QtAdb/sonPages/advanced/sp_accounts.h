@@ -9,6 +9,7 @@
 #include <QScrollBar>
 #include <QFile>
 #include "../../animationwidget.h"
+#include "textexplainer.h"
 
 namespace Ui {
 class sp_accounts;
@@ -35,11 +36,11 @@ public slots:
 
 
 private:
-    Ui::sp_accounts *ui;
+    Ui::sp_accounts *ui = nullptr;
 
-    adbProcess *process;
-    adbThread *thread;
-    textExplainer *explainer;
+    adbThread *thread = nullptr;
+    // 值成员：原先这里是未初始化的裸指针，解引用属未定义行为
+    textExplainer explainer;
 };
 
 

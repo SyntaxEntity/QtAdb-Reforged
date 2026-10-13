@@ -16,7 +16,7 @@ public:
     ~monitor();
 
 private:
-    Ui::monitor *ui;
+    Ui::monitor *ui = nullptr;
 };
 
 #endif // MONITOR_H

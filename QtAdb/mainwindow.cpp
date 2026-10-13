@@ -1,6 +1,16 @@
 #include "mainwindow.h"
+#include "devicenames.h"
 #include "qobjectdefs.h"
 #include "ui_mainwindow.h"
+#include "adbclient.h"
+#include <QFileInfo>
+#include "textexplainer.h"
+#include "uishadow.h"
+#include "uistyles.h"
+
+
+// 两个对话框（无线调试 / Magisk 救砖）都要摆一片"标签 + 输入框"，
+// 原来每个对话框各写一遍"建控件 → 设文本 → 设样式"。这里收成文件级助手。
 
 
 MainWindow::MainWindow(QWidget *parent)
@@ -12,16 +22,14 @@ MainWindow::MainWindow(QWidget *parent)
     initEnvironmentPATH();
 
     /*加载动画GIF*/
-    //movie = new QMovie(":/gif/image/gif/final.gif");
 
     /*currentPage指针*/
     currentPage = NULL;
-    //WCMPage = NULL;
 
     /*devList 中的当前设备索引*/
     current_device = 0;
-    ui->dynamic_island->setText("请先选择设备");
-    ui->dynamic_island->setStyleSheet("background-color:rgba(255,255,255,0.9);border-radius:4px;border:0px;");
+    ui->dynamic_island->setText(tr("请先选择设备"));
+    ui->dynamic_island->setStyleSheet(UiStyles::kSemiWhitePanel);
     //ui->comboBox->setPlaceholderText("点击此处选择设备");
 
     /*连接信号与槽*/
@@ -35,10 +43,8 @@ MainWindow::MainWindow(QWidget *parent)
     view = new comboboxListWidget(ui->comboBox);
     ui->comboBox->setModel(view->model());
     ui->comboBox->setView(view);
-    //ui->pluginBtn->hide();
 
     /*初始化对象*/
-    process = new adbProcess();
     explainer = new textExplainer();
     maker = new pageMaker();
     listener = new usb_listener();
@@ -48,13 +54,27 @@ MainWindow::MainWindow(QWidget *parent)
 
     qApp->installNativeEventFilter(listener);
 
-    //listener->EmitMySignal();
     this->setAttribute(Qt::WA_NativeWindow);
+
+    /*设备热插拔：轮询兜底*/
+    // Windows 的 usb_listener 只对 USB 事件生效（无线调试设备不会触发），
+    // Linux 下没有原生通知（usb_listener 直接返回 false）。
+    // 这里用定时器轮询走【与原生通知完全相同】的路径（slot_refreshDevList 会置 liangYi=true），
+    // 因此只有设备列表真的变化时才重建下拉框，不会打断用户当前选择的设备。
+    // refreshDevList() 内部有"已有请求在途则跳过"的保护，不会堆积请求。
+    m_deviceWatcher = new QTimer(this);
+    connect(m_deviceWatcher, &QTimer::timeout, this, &MainWindow::slot_refreshDevList);
+    m_deviceWatcher->start(2500);
 
     /*启动监听*/
 
-    /*启动ADB，将延长页面创建时间，在此期间显示启动界面，显示了个勾八*/
-    process->run("adb server");
+    /*启动ADB与设备列表都不再阻塞界面*/
+    connect(AdbClient::instance(), SIGNAL(finished(int,int,QString,QString)),
+            this, SLOT(onAdbRequestFinished(int,int,QString,QString)));
+
+    // 原实现用的是 "adb server"（并不是合法命令，只会打印用法），这里改为 start-server；
+    // 二者都改为异步发起：设备无响应时窗口立刻可见，而不是等 20 秒。
+    AdbClient::instance()->run({QStringLiteral("start-server")});
     refreshDevList();
 
     /*用户未选择设备前，锁定界面*/
@@ -69,8 +89,25 @@ MainWindow::MainWindow(QWidget *parent)
 
 MainWindow::~MainWindow()
 {
+    // 先请求监视线程退出（它在后台循环采样）
+    stopMonitorThread();
+
+    // 停止热插拔轮询，避免退出过程中再发起请求
+    if(m_deviceWatcher != nullptr)
+    {
+        m_deviceWatcher->stop();
+    }
+
+    // listener 以 qApp 为宿主注册了原生事件过滤器，必须在删除对象【之前】摘除，
+    // 否则 qApp 会持有悬空指针；原实现直接不删除，造成每次退出泄漏一个对象。
+    if(listener != nullptr)
+    {
+        qApp->removeNativeEventFilter(listener);
+        delete listener;
+        listener = nullptr;
+    }
+
     ui->indexList->clear();
-    delete process;
     delete explainer;
     delete maker;
     delete ui;
@@ -78,446 +115,364 @@ MainWindow::~MainWindow()
 
 void MainWindow::initEnvironmentPATH()              //方法：设置环境变量
 {
-    QTextCodec::setCodecForLocale(QTextCodec::codecForName("UTF_8"));
-
-    /*
-    QString envPath = qgetenv("PATH");      //获取当前环境变量
-    QString appDirPath = QApplication::applicationDirPath();    //获取程序所在位置
-    QString userPath = appDirPath + "\\platform-tools";     //向字符串中添加ADB环境
-    envPath += QDir::toNativeSeparators(userPath).prepend(';');
-    qputenv("PATH",envPath.toStdString().c_str());*/          //更改环境变量
-    //qDebug() << envPath.toStdString().c_str();
-
-    //QTextCodec *code = QTextCodec::codecForName("UTF_8");
+    // 注：原实现在此处调用 QTextCodec::setCodecForLocale()。
+    //     Qt 6 已把 QTextCodec 移出 QtCore（只在 Qt5Compat 中保留），而 Qt 6 内部
+    //     统一使用 UTF-8，该调用既无必要（且编解码器名 "UTF_8" 本身有误、会返回
+    //     nullptr 并把编码重置为本地编码），故删除。删除后不再需要 core5compat 模块。
 
     QString envPath = qgetenv("PATH");      //获取当前环境变量
-    //qDebug() << "envpath" << envPath;
 
-    //QMessageBox::warning(NULL, "nvpath",envPath);
 
     QString appDirPath = QApplication::applicationDirPath();    //获取程序所在位置
-    //qDebug() << "appDirPath" << appDirPath;
     if(appDirPath.contains(QRegularExpression("[\u4e00-\u9fa5]")))
     {
-        //qDebug() << "-------------------" << appDirPath.contains(QRegularExpression("[\\x4e00-\\x9fa5]+"));
-        //qDebug() << "\\x4e00" ;
-        //qDebug() << "\\x9fa5" ;
-        QMessageBox::warning(NULL, "路径问题","请将程序置于纯英文路径下，否则将无法正确设置ADB环境\n"
-                                             "您当前的路径为：\n"
+        QMessageBox::warning(NULL, tr("路径问题"),tr("请将程序置于纯英文路径下，否则将无法正确设置ADB环境\n您当前的路径为：\n")
                                              + appDirPath);
     }
 
+    // 按平台定位随程序分发的 platform-tools 目录。修正原实现的三个问题：
+    //   1) PATH 分隔符在 Windows 上是 ';'、在类 Unix 上是 ':'，原实现硬编码 ';'，
+    //      导致 Linux/macOS 下注入的目录永远不会被搜索（表现为 adb 找不到）；
+    //   2) 原实现用反斜杠拼路径，且 Linux 分支指向仓库中并不存在的
+    //      "platform-tools-linux" 目录；
+    //   3) 原实现把 QString userPath 分别声明在三个互斥的 #ifdef 中，
+    //      平台都不匹配时 userPath 未声明 → 编译失败。
+    QString userPath;
 #ifdef Q_OS_WIN32
-    QString userPath = appDirPath + "\\Resources\\platform-tools";     //向字符串中添加ADB环境
+    userPath = appDirPath + "/Resources/platform-tools";
+#elif defined(Q_OS_MACOS)
+    userPath = appDirPath + "/platform-tools-OSX";
+#else
+    userPath = appDirPath + "/Resources/platform-tools";
 #endif
 
-#ifdef Q_OS_OSX
-    QString userPath = appDirPath + "\\platform-tools-OSX";     //向字符串中添加ADB环境
-#endif
-
-#ifdef Q_OS_LINUX
-    QString userPath = appDirPath + "\\platform-tools-linux";     //向字符串中添加ADB环境
-#endif
-    //QString userPath = appDirPath + "\\platform-tools";     //向字符串中添加ADB环境
-    //qDebug() << "userPath" << userPath;
-    //QMessageBox::warning(NULL, "userPath",userPath);
-
-    envPath += QDir::toNativeSeparators(userPath).prepend(';');
-    //qDebug() << "envPath" << envPath;
-    //QMessageBox::warning(NULL, "envPath",envPath);
-
-    qputenv("PATH",envPath.toStdString().c_str());         //更改环境变量
-}
-
-void MainWindow::refreshDevList()                   //方法：刷新设备列表
-{
-
-    //ui->comboBox->clear();
-    /*DEBUG*/
-    bool changed = false;       //这个是判断列表有没有变化用的
-    //qDebug() << "******************一次调用*********************";
-    //qDebug() << "refreshDevList devList is empty? " << devList.isEmpty() << QTime::currentTime();
-    //qDebug() << "devList.size()" << devList.size();
-/*
-    for(int i = 0; i < devList.size();i++)
+    // 目录不存在时不污染 PATH，直接回退到系统 PATH 中的 adb
+    if(QFileInfo::exists(userPath))
     {
-        //qDebug() << "devList[" << i << "] is :" << devList[i].addr;
-    }
-*/
-    /*DEBUG_END*/
-    //qDebug() << "shit 0";
-    bool devList_is_empty = devList.isEmpty();
-
-    QList<device> tmpList;  //暂时的list，存储刷新前的devlist，用来与之后的devlist对比以确认设备是否有改变
-
-    /*给tmpList赋值*/
-    if(!devList_is_empty)
-    {
-        for(int i = 0; i < devList.size();i++)
-        {
-            //Debug() << "shit 3.1";
-            device dev;
-            dev.device_debug = devList[i].device_debug;
-            dev.device_product = devList[i].device_product;
-            dev.addr = devList[i].addr;
-            dev.model = devList[i].model;
-            dev.state = devList[i].state;
-            dev.transport_id = devList[i].transport_id;
-            tmpList.append(dev);
-        }
-    }
-    //qDebug() << "tmpList.size()" << tmpList.size();
-
-    //ui->comboBox->clear();
-    devList.clear();            //清空设备列表
-    qDebug() << "Bug#01 finding!";
-    devList.append(explainer->getDevList_windows(process->run("adb devices -l")));    //重新赋值
-    //devList = explainer->getDevList_windows(process->run("adb devices -l"));    //重新赋值
-    qDebug() << "Bug#01 found!";
-    //qDebug() << "devList after explain:" << devList.isEmpty();
-
-    /*
-    qDebug() << "shit 1";
-    for(int i = 0; i < tmpList.size();i++)
-    {
-        qDebug() << "shit 2";
-        qDebug() << "tmpList[" << i << "] is :" << devList[i].addr;
-    }
-    for(int i = 0; i < devList.size();i++)
-    {
-        qDebug() << "shit 3";
-        qDebug() << "devList new[" << i << "] is :" << devList[i].addr;
-    }
-    qDebug() << "shit finish";*/
-
-
-    /*判断列表内容是否变化，若变化则发送 adbDeviceChanged 信号*/
-    if(!devList_is_empty)
-    {
-        if(devList.size() == tmpList.size())
-        {
-            for(int i = 0; i < devList.size() && i < tmpList.size() ; i++)
-            {
-                if(devList[i].addr != tmpList[i].addr)
-                {
-                    emit adbDeviceChanged();
-                    changed = true;
-                    break;
-                }
-            }
-        }
-        else
-        {
-            emit adbDeviceChanged();
-            changed = true;
-        }
-    }
-    else if(!devList.isEmpty() && tmpList.isEmpty())
-    {
-        emit adbDeviceChanged();
-        changed = true;
-    }
-    else if(devList.isEmpty() && !tmpList.isEmpty())
-    {
-        emit adbDeviceChanged();
-        changed = true;
+        envPath += QDir::listSeparator() + QDir::toNativeSeparators(userPath);
+        qputenv("PATH",envPath.toUtf8());         //更改环境变量
     }
     else
     {
-        //qDebug() << "else:" << devList.isEmpty() << tmpList.isEmpty() << devList_is_empty;
+        qWarning() << tr("未找到随程序分发的 platform-tools 目录，将使用系统 PATH 中的 adb：") << userPath;
+    }
+}
+
+// 方法：请求刷新设备列表。
+// 设备列表改为【异步】获取：原实现直接在 GUI 线程里同步等待 `adb devices -l`
+// （最长 20s），设备无响应时窗口要等 20 秒才显示出来。
+// 现在只发起请求，结果到达后在 onAdbRequestFinished() 中更新界面。
+void MainWindow::refreshDevList()
+{
+    if(m_deviceListRequest != 0)
+    {
+        return;         // 已有请求在途，避免重复排队
+    }
+    m_deviceListRequest = AdbClient::instance()->run({QStringLiteral("devices"), QStringLiteral("-l")});
+}
+
+void MainWindow::onAdbRequestFinished(int requestId, int exitCode,
+                                      const QString &standardOutput, const QString &standardError)
+{
+    if(requestId != m_deviceListRequest)
+    {
+        return;         // 不是设备列表请求（其它模块也可能使用 AdbClient）
+    }
+    m_deviceListRequest = 0;
+
+    if(exitCode != 0 && !standardError.isEmpty())
+    {
+        qWarning().noquote() << tr("获取设备列表失败：") << standardError;
     }
 
-    QList<int> off;    //未响应设备索引
+    applyDeviceList(standardOutput);
+}
 
-    /*将设备信息传入 List l ，并将l的值显示在combobox中*/
-    QStringList l;
-    l.clear();
+// 方法：用 `adb devices -l` 的输出更新设备列表与界面（原 refreshDevList 的正文）
+// ── 设备列表的两个纯判定函数（从 applyDeviceList 里抽出来，便于单独读懂与复用）──
 
-    /*一条一条添加*/
-    for (int i = 0 ; i < devList.size() ; i++ )
+// 列表是否发生了"需要重建界面"的变化：数量、序列号或状态任一不同。
+// 注意必须比较 state：设备从"未授权"变为"已授权"时界面要跟着刷新。
+static bool deviceListChanged(const QList<device> &before, const QList<device> &after)
+{
+    if(before.size() != after.size())
     {
-        /*原来的*/
-        QString devItem = devList[i].state + " " + explainer->get_words_after(devList[i].model, ":") + " " + devList[i].addr;
-        l.append(devItem);
-        //qDebug() << "l[" << i << "] = " << l[i];
-        if(devList[i].state == "[未响应]")
+        return true;    // 含"原来没设备 / 现在有设备"以及数量增减
+    }
+    for(int i = 0; i < before.size(); ++i)
+    {
+        if(before[i].addr != after[i].addr || before[i].state != after[i].state)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+// "未响应"设备在列表中的下标（下拉列表要把它们标出来）
+static QList<int> offlineIndexes(const QList<device> &list)
+{
+    QList<int> off;
+    for(int i = 0; i < list.size(); ++i)
+    {
+        if(list[i].state == DeviceState::Offline)
         {
             off.append(i);
-            /*
-            QVariant v(0);
-            ui->comboBox->setItemData(i, v, Qt::UserRole - 1);
-            */
         }
-        /*原来的END*/
-
-        /*新的*/
-
-        if(changed)     //changed为true则设备列表有所变化，此时才更新
-        {
-            //qDebug() <<"changed so clear";
-
-            disconnect(this->ui->comboBox,SIGNAL(currentIndexChanged(int)),this,SLOT(setCurrentDevice(int)));  //取消连接
-            ui->comboBox->clear();
-            view->setUpList(devList, off);
-            qDebug() << "1";
-            connect(this->ui->comboBox,SIGNAL(currentIndexChanged(int)),this,SLOT(setCurrentDevice(int)));  //重新连接
-        }
-
-        /*新的END*/
     }
+    return off;
+}
 
-    /*出意外弄回来
-    if(changed)     //changed为true则设备列表有所变化，此时才更新
-    {
-        //qDebug() <<"changed so clear";
-        ui->comboBox->clear();
-        ui->comboBox->addItems(l);
-    }*/
+// 重建设备下拉框：先断开 currentIndexChanged，避免 clear() 触发 setCurrentDevice()
+// 去操作已经不存在的设备；重建后再连回来。
+// 原实现把这段在"逐设备循环"和"liangYi 分支"里各写了一遍。
+void MainWindow::rebuildDeviceCombo(const QList<int> &offline)
+{
+    disconnect(this->ui->comboBox, SIGNAL(currentIndexChanged(int)), this, SLOT(setCurrentDevice(int)));
+    ui->comboBox->clear();
+    view->setUpList(devList, offline);
+    connect(this->ui->comboBox, SIGNAL(currentIndexChanged(int)), this, SLOT(setCurrentDevice(int)));
+}
 
-    if(!liangYi)    //
+// 设备列表变化后要跟着更新的一切：自动选中、离线项置灰、顶部标签与监视器。
+void MainWindow::updateDeviceIndicators(const QList<int> &offline)
+{
+    // 刷新会先 clear() 下拉框再重填，此刻 currentIndex 变为 -1；
+    // 而 slot_taiChi() 只在 currentIndex != -1 时才 unlock() ——
+    // 于是"刷新之后界面一直保持锁定"，必须手动再点一次下拉框才能恢复。
+    // 检测到设备时自动选中第一个（与原实现 current_device = 0 的假设一致）。
+    if(ui->comboBox->currentIndex() < 0 && ui->comboBox->count() > 0)
     {
-        disconnect(this->ui->comboBox,SIGNAL(currentIndexChanged(int)),this,SLOT(setCurrentDevice(int)));  //取消连接
-        ui->comboBox->clear();
-        view->setUpList(devList, off);
-        connect(this->ui->comboBox,SIGNAL(currentIndexChanged(int)),this,SLOT(setCurrentDevice(int)));  //重新连接
+        ui->comboBox->setCurrentIndex(0);
     }
-
-    liangYi = false;
 
     /*将离线设备设为不可选*/
-    for(int i = 0; i < off.count();i++)
+    for(int i = 0; i < offline.count(); i++)
     {
         QVariant v(0);
-        ui->comboBox->setItemData(off[i], v, Qt::UserRole - 1);
+        ui->comboBox->setItemData(offline[i], v, Qt::UserRole - 1);
     }
 
     /*若没有设备，重置*/
     if(devList.isEmpty())
     {
         current_device = -1;         //重设当前设备
-        ui->dynamic_island->setText("请先选择设备");
-        ui->dynamic_island->setStyleSheet("background-color:rgba(255,255,255,0.9);border-radius:4px;border:0px;");
-    }
-    else
-    {
-        current_device = 0;
-        ui->dynamic_island->setText(devList[current_device].addr);
-        qDebug()<<"devList[current_device].state="<<devList[current_device].state;
-        if(devList[current_device].state=="[未授权]")
-        {
-            ui->dynamic_island->setStyleSheet("background-color:rgba(237,90,101,1);border-radius:4px;border:0px;");
-            //this->update();
-            //rgba(237,90,101,0.6)
-        }
-        else
-        {
-            ui->dynamic_island->setStyleSheet("background-color:rgba(255,255,255,0.9);border-radius:4px;border:0px;");
-        }
+        // 设备全部消失时停止监视器（否则它会一直对着已拔出的设备发请求）
+        stopMonitorThread();
+        ui->dynamic_island->setText(tr("请先选择设备"));
+        ui->dynamic_island->setStyleSheet(UiStyles::kSemiWhitePanel);
+        return;
     }
 
+    current_device = 0;
+    // 顶部标签是"当前设备"始终可见的位置：有别名时显示别名
+    const QString alias = DeviceNames::nameFor(devList[current_device].addr);
+    ui->dynamic_island->setText(alias.isEmpty() ? devList[current_device].addr : alias);
+    // 未授权设备用红色标出，其余用常规底色
+    const bool unauthorized = (devList[current_device].state == DeviceState::Unauthorized);
+    ui->dynamic_island->setStyleSheet(unauthorized
+            ? "background-color:rgba(237,90,101,1);border-radius:4px;border:0px;"
+            : UiStyles::kSemiWhitePanel);
+}
+
+void MainWindow::applyDeviceList(const QString &output)
+{
+    // ① 取变化前的快照（用于判断"设备列表有没有变"）
+    const QList<device> before = devList;
+
+    // ② 重新解析
+    devList = explainer->getDevList_windows(output);
+
+    // ③ 有变化才发信号（比较逻辑见 deviceListChanged()）
+    const bool changed = deviceListChanged(before, devList);
+    if(changed)
+    {
+        emit adbDeviceChanged();
+    }
+
+    // ④ 需要时重建下拉框。
+    //    原实现把重建放在 `for(int i = 0; i < devList.size(); i++)` 里，而循环体
+    //    根本不使用 i —— 等于"有几台设备就重建几次"（每次都 clear + 重建控件）。
+    //    最后状态与只重建一次完全相同，故改为一次判断。
+    const QList<int> offline = offlineIndexes(devList);
+    if(changed || !liangYi)
+    {
+        rebuildDeviceCombo(offline);
+    }
     liangYi = false;        //重置两仪
 
-    //qDebug() << "******************一次调用结束*********************";
+    // ⑤ 顶部标签、离线置灰、自动选中、监视器
+    updateDeviceIndicators(offline);
 }
 
 void MainWindow::on_refreshButton_clicked()         //槽：按下刷新按钮
 {
-    if(thread_mon != NULL)
-    {
-        //siXiangTimer->stop();
-        siXiangTimer->deleteLater();
-        siXiangTimer = NULL;
-        //qDebug() <<"thread_mon != NULL";
-        //qDebug() <<"disconnect";
-        thread_mon->disconnect();
-        //qDebug() <<"exit()";
-        thread_mon->quit();
-        //qDebug() <<"deleteLater()";
-        //thread_mon->deleteLater();
-    }
-
+    // 刷新只做三件事：重新拉取设备列表、重置占用率显示、按需重启监视器。
+    //
+    // 这里【不重建页面、也不 lock()】：
+    //  * 设备若发生变化，applyDeviceList → setCurrentDevice() 本来就会重建页面；
+    //  * 原实现是 lock() + initBasePage(6)，而 key 6 是"关于"页 —— 每次刷新都会
+    //    把用户从正在看的页面强行带走，并且一旦解锁条件不满足就会永久锁死界面
+    //    （见 §12 记录的"刷新后界面一直锁定"）。
     refreshDevList();
-
-    lock();
-    /*
-    if(currentPage != NULL)
-    {
-        currentPage->~basePage();
-        currentPage = NULL;
-    }*/
-
-    initBasePage(6);
     reset_monitorBars();
-
     resetMonitorThread(ui->comboBox->currentIndex());
 }
 
 void MainWindow::resetMonitorThread(int index)
 {
-    if(thread_mon != NULL && siXiangTimer != NULL)
+    if(index < 0 || index >= devList.size())
     {
-        //qDebug() <<"stop";
-        //siXiangTimer->stop();
-        //qDebug() <<"delete";
-        siXiangTimer->deleteLater();
-        //qDebug() <<"=NULL";
-        siXiangTimer = NULL;
-        //qDebug() <<"thread_mon != NULL";
-        //qDebug() <<"disconnect";
-        thread_mon->disconnect();
-        //qDebug() <<"exit()";
-        thread_mon->quit();
-        //qDebug() <<"deleteLater()";
-        thread_mon->deleteLater();
+        // 索引无效多半是"刷新进行中、下拉框被短暂清空"造成的：
+        // 此时不能停掉监视器，否则每次刷新都会丢掉采样基准，
+        // CPU/内存显示要等约 4 秒（两次采样）才恢复。
+        // 只有当设备列表确实为空时才停止。
+        if(devList.isEmpty())
+        {
+            stopMonitorThread();
+        }
+        return;
     }
 
-    //ui->widget_height->layout()->addWidget(ui->comboBox.it)
-
-
-    if(index >= 0)
+    // 设备没变就保持现有监视器继续采样。
+    // 采集 CPU 占用率需要"两次采样求差"，重建监视器等于丢掉基准 ——
+    // 而每次点"刷新"都会走到这里，于是刷新之后 CPU/内存要等约 4 秒才恢复显示。
+    if(thread_mon != nullptr && thread_mon->deviceAddress() == devList[index].addr)
     {
-        //qDebug() <<"NEW";
-        siXiangTimer = new QTimer();
-        thread_mon = new thread_monitor(devList[current_device]);
-        //qDebug() <<"devList[current_device]:" << "current_device=" << current_device << "dev:" << devList[current_device].addr;
-        //qDebug() <<"CONNECT";
-        connect(siXiangTimer,SIGNAL(timeout()),thread_mon,SLOT(getInfo()));
-        connect(thread_mon,SIGNAL(signal_monitor(float,float)),this,SLOT(slot_update_monitor(float,float)));
-        //qDebug() <<"START";
-        thread_mon->start();
-        siXiangTimer->start(2000);
-        ui->progressBar_CPU->setRange(0,100);
-        ui->progressBar_RAM->setRange(0,100);
+        return;
     }
+
+    stopMonitorThread();
+
+    // 原实现使用 devList[current_device]（旧索引）创建监视线程：
+    // 在 setCurrentDevice() 中先创建线程、后更新 current_device，
+    // 于是切换设备后监控的其实是【上一台】设备。这里改用传入的 index。
+    thread_mon = new thread_monitor(devList[index]);
+    // 监视器结束后由它自己释放
+    connect(thread_mon,SIGNAL(finished()),thread_mon,SLOT(deleteLater()));
+    connect(thread_mon,SIGNAL(signal_monitor(float,float)),this,SLOT(slot_update_monitor(float,float)));
+    thread_mon->start();
+
+    ui->progressBar_CPU->setRange(0,100);
+    ui->progressBar_RAM->setRange(0,100);
+}
+
+// 请求监视线程退出。
+// 原实现用 GUI 线程里的 QTimer 驱动采样（getInfo() 是普通槽），线程本身是空转的；
+// 现在线程自己循环采样，这里只需通知停止并断开信号。
+void MainWindow::stopMonitorThread()
+{
+    if(thread_mon == nullptr)
+    {
+        return;
+    }
+
+    thread_mon->stop();
+    // 只断开与 MainWindow 的连接；线程内部 finished()→deleteLater() 的连接保留，
+    // 这样线程结束后仍能自行释放。
+    thread_mon->disconnect(this);
+    thread_mon = nullptr;
 }
 
 void MainWindow::setCurrentDevice(int index)        //槽：改变所选设备
 {
-    //qDebug() <<"MainWindow:if" << "index = " << index;
 
-    if(thread_mon != NULL && siXiangTimer != NULL)
-    {
-        //qDebug() <<"stop";
-        //siXiangTimer->stop();
-        //qDebug() <<"delete";
-        siXiangTimer->deleteLater();
-        //qDebug() <<"=NULL";
-        siXiangTimer = NULL;
-        //qDebug() <<"thread_mon != NULL";
-        //qDebug() <<"disconnect";
-        thread_mon->disconnect();
-        //qDebug() <<"exit()";
-        thread_mon->quit();
-        //qDebug() <<"deleteLater()";
-        thread_mon->deleteLater();
-    }
-
-    //ui->widget_height->layout()->addWidget(ui->comboBox.it)
-
+    // 原实现把“停止旧线程 + 启动新线程”整段复制了一遍，且用旧索引创建监视对象；
+    // 统一交给 resetMonitorThread()，并传入本次选中的索引。
+    resetMonitorThread(index);
 
     if(index >= 0)
     {
-        //qDebug() <<"NEW";
-        siXiangTimer = new QTimer();
-        thread_mon = new thread_monitor(devList[current_device]);
-        //qDebug() <<"devList[current_device]:" << "current_device=" << current_device << "dev:" << devList[current_device].addr;
-        //qDebug() <<"CONNECT";
-        connect(siXiangTimer,SIGNAL(timeout()),thread_mon,SLOT(getInfo()));
-        connect(thread_mon,SIGNAL(signal_monitor(float,float)),this,SLOT(slot_update_monitor(float,float)));
-        //qDebug() <<"START";
-        thread_mon->start();
-        siXiangTimer->start(2000);
-        ui->progressBar_CPU->setRange(0,100);
-        ui->progressBar_RAM->setRange(0,100);
-
         if(currentPage != NULL)
         {
             delete currentPage;
-            //currentPage->~basePage();
             currentPage = NULL;
         }
-        //initBasePage(6);
-        //ui->indexList->setCurrentRow(6);
 
         current_device = index;
-        //initBasePage(0);
-        /*
-        if(devList[current_device].state == "[侧载]")
-        {
-            initBasePage(5);
-        }*/
 
         if(ui->indexList->currentRow() == 0)
         {
-            //qDebug() << "initBasePage";
             initBasePage(0);
         }
         else
         {
-            //qDebug() << "setCurrentRow";
             ui->indexList->setCurrentRow(0);
         }
 
-        ui->dynamic_island->setText(explainer->get_words_after(devList[current_device].model,":"));
+        // 同上：优先显示别名，其次型号名
+        const QString alias2 = DeviceNames::nameFor(devList[current_device].addr);
+        ui->dynamic_island->setText(alias2.isEmpty()
+                                        ? explainer->get_words_after(devList[current_device].model, ":")
+                                        : alias2);
     }
     unlock();
 }
 
 void MainWindow::initBasePage(int key)              //槽：生成basePages
 {
-    while(key != -1)
+    // indexList 被清空时会发出 currentRowChanged(-1)（"没有选中行"）。
+    // 原实现把整个函数体包在 `while(key != -1) { ... break; }` 里，等于这种情况什么也不做，
+    // 这里保留该语义（并且不做 lock()，避免与正在进行的动画互相干扰）。
+    if(key < 0)
     {
-        //this->setEnabled(false);
-        this->lock();
-
-        if(currentPage != NULL)         //销毁上一个basePage
-        {
-            //currentPage->playExitAnimation();
-
-            //qDebug() << "deleting currentPage";
-            delete currentPage;
-            //currentPage->~basePage();
-
-            //qDebug() << "delete currentPage";
-            //currentPage->~basePage();
-            currentPage = NULL;
-        }
-
-        /*动画*/
-        //ui->indexList[key]
-
-        /**/
-
-        currentPage = new basePage(this);
-
-        //qDebug() << "height in initBasePage()" << ui->widget_height->height();
-        currentPage->wgtHeight = ui->widget_height->height();
-        //qDebug() << "height2 in initBasePage()" << currentPage->wgtHeight;
-        connect(currentPage,SIGNAL(animationEnd()),this,SLOT(slot_taiChi()));
-
-        if(devList.isEmpty())
-        {
-            device * noDevice = new device;
-            noDevice->addr = "#EMPTY#";
-            currentPage = maker->createPageWithKey(6,ui->page,*noDevice);
-        }
-        else
-        {
-            currentPage = maker->createPageWithKey(key,ui->page,devList[current_device]);
-        }
-
-        ui->verticalLayout_2->addWidget(currentPage);
-
-        currentPage->playLoadAnimation(ui->widget_height->height());
-        //currentPage->playExitAnimation();
-        //currentPage->setVisible(true);
-        taiChiTimer = new QTimer(this);
-        connect(taiChiTimer, SIGNAL(timeout()), this, SLOT(slot_taiChi()));
-        taiChiTimer->setSingleShot(true);
-        taiChiTimer->start(700);
-
-        break;
+        return;
     }
+
+    this->lock();
+
+    // ① 销毁上一个页面（其子控件随页面一起释放）
+    if(currentPage != nullptr)
+    {
+        delete currentPage;
+        currentPage = nullptr;
+    }
+
+    // ② 选目标设备：没有设备时用一个占位设备，并固定打开"关于"页（key 6）。
+    //    这里同时挡住 current_device 越界（它由 applyDeviceList / setCurrentDevice 维护，
+    //    正常不会是 -1 与"列表非空"同时出现，但越界访问 QList 会直接崩）。
+    device target;
+    int pageKey = key;
+    if(devList.isEmpty() || current_device < 0 || current_device >= devList.size())
+    {
+        target.addr = "#EMPTY#";
+        pageKey = 6;
+    }
+    else
+    {
+        target = devList[current_device];
+    }
+
+    // ③ 创建页面。
+    //    原实现先 new 一个 basePage、设 wgtHeight、连信号，然后在两个分支里都立刻
+    //    delete 掉再换成 maker 创建的页面 —— 那第一个页面纯属白建（连的槽也随之丢弃），
+    //    每次导航都多一次分配；而且那个 `wgtHeight = ...` 打在即将删除的对象上，是死赋值
+    //    （真实页面一直用 animationWidget 的默认值 427，且动画用的是显式传入的高度）。
+    currentPage = maker->createPageWithKey(pageKey, ui->page, target);
+    if(currentPage == nullptr)
+    {
+        // createPageWithKey 对未知序号返回 nullptr；直接 addWidget(nullptr) 会崩。
+        qWarning() << "创建页面失败，页面序号 =" << pageKey;
+        this->unlock();          // 上面 lock() 过，这里必须解锁，否则界面永久锁死
+        return;
+    }
+
+    connect(currentPage, SIGNAL(animationEnd()), this, SLOT(slot_taiChi()));
+    ui->verticalLayout_2->addWidget(currentPage);
+    currentPage->playLoadAnimation(ui->widget_height->height());
+
+    // ④ 重设"动画结束"定时器。
+    //    上一次的若仍在等待（快速连续切换页面），先取消：多个定时器会各自触发
+    //    slot_taiChi()，而槽里只释放成员指向的那一个，其余的会一直留到窗口销毁。
+    if(taiChiTimer != nullptr)
+    {
+        taiChiTimer->stop();
+        taiChiTimer->deleteLater();
+    }
+    taiChiTimer = new QTimer(this);
+    connect(taiChiTimer, SIGNAL(timeout()), this, SLOT(slot_taiChi()));
+    taiChiTimer->setSingleShot(true);
+    taiChiTimer->start(700);
 }
 
 void MainWindow::addItemToIndex(indexListItem *itemWidget)  //方法：向indexist中添加单个item
@@ -530,42 +485,38 @@ void MainWindow::addItemToIndex(indexListItem *itemWidget)  //方法：向indexi
 void MainWindow::addIndexItems()                    //方法：初始化向indexList中添加的item，完成indexList创建。
 {
     indexListItem *devInfo = new indexListItem(this->ui->indexList);
-    devInfo->setText("设备信息");
+    devInfo->setText(tr("设备信息"));
     devInfo->setPic("image:url(:/ico/image/ico/smartphone-line.svg);background-color:rgba(255,255,255,0);");
     addItemToIndex(devInfo);
-    /*
-    QListWidgetItem * tmpItem = new QListWidgetItem();
-    ui->indexList->addItem(tmpItem);
-    ui->indexList->setItemWidget(tmpItem, devInfo);*/
 
     indexListItem *activator = new indexListItem(this->ui->indexList);
-    activator->setText("激活");
+    activator->setText(tr("激活"));
     activator->setPic("image:url(:/ico/image/ico/pulse-line.svg);background-color:rgba(255,255,255,0);");
     addItemToIndex(activator);
 
     indexListItem *apps = new indexListItem(this->ui->indexList);
-    apps->setText("软件包管理器");
+    apps->setText(tr("软件包管理器"));
     apps->setPic("image:url(:/ico/image/ico/google-play-line.svg);background-color:rgba(255,255,255,0);");
     addItemToIndex(apps);
 
     indexListItem *devControl = new indexListItem(this->ui->indexList);
-    devControl->setText("设备控制");
+    devControl->setText(tr("设备控制"));
     devControl->setPic("image:url(:/ico/image/ico/remote-control-2-line.svg);background-color:rgba(255,255,255,0);");
     addItemToIndex(devControl);
 
     indexListItem *recovery = new indexListItem(this->ui->indexList);
-    recovery->setText("Recovery");
+    recovery->setText(tr("Recovery"));
     recovery->setPic("image:url(:/ico/image/ico/registered-line.svg);background-color:rgba(255,255,255,0);");
     addItemToIndex(recovery);
 
     //:/ico/image/ico/code-s-slash-line.svg //05
     indexListItem *advanced = new indexListItem(this->ui->indexList);
-    advanced->setText("其它");
+    advanced->setText(tr("其它"));
     advanced->setPic("image:url(:/ico/image/ico/code-s-slash-line.svg);background-color:rgba(255,255,255,0);");
     addItemToIndex(advanced);
 
     indexListItem *about = new indexListItem(this->ui->indexList);
-    about->setText("关于");
+    about->setText(tr("关于"));
     about->setPic("image:url(:/ico/image/ico/about/information-line.svg);background-color:rgba(255,255,255,0);");
     addItemToIndex(about);
 
@@ -574,17 +525,13 @@ void MainWindow::addIndexItems()                    //方法：初始化向index
 
 void MainWindow::lock()                             //方法：锁定mainwindow中控件
 {
-    //this->setEnabled(false);
     ui->indexList->setEnabled(false);
-    //currentPage->setEnabled(false);
     ui->page->setEnabled(false);
 }
 
 void MainWindow::unlock()                           //方法：解锁mainwindow中的控件
 {
-    //this->setEnabled(false);
     ui->indexList->setEnabled(true);
-    //currentPage->setEnabled(true);
     ui->page->setEnabled(true);
 }
 
@@ -616,78 +563,23 @@ void MainWindow::setStyles()                        //方法：设置样式
                                 "QComboBox QAbstractItemView::item:selected{height:300px;border:0px solid #BDBDBD;border-radius:0px 0px 0px 0px;color:black;background-color:rgba(255,255,255,255);}"
                                 );
 
-    /*
-    ui->refreshButton->setStyleSheet("QPushButton{background-color:rgba(255,255,255,0.9);border-radius:4px;}"
-                                     "QPushButton:hover{background-color:rgba(255,255,255,0.7);}"
-                                     "QPushButton:pressed{background-color:rgba(255,255,255,0.6);}");*/
-    //ui->iconLabel->setStyleSheet("background-color:transparent;");
     ui->fakeSpacer->setStyleSheet("background-color:transparent;");
 
-    QGraphicsDropShadowEffect *shadowEffect_refreshButton = new QGraphicsDropShadowEffect(this);
-    shadowEffect_refreshButton->setOffset(0,0);
-    shadowEffect_refreshButton->setColor(Qt::gray);
-    shadowEffect_refreshButton->setBlurRadius(5);
-
-    QGraphicsDropShadowEffect *shadowEffect_killAdbBtn = new QGraphicsDropShadowEffect(this);
-    shadowEffect_killAdbBtn->setOffset(0,0);
-    shadowEffect_killAdbBtn->setColor(Qt::gray);
-    shadowEffect_killAdbBtn->setBlurRadius(5);
-
-    QGraphicsDropShadowEffect *shadowEffect_testBtn = new QGraphicsDropShadowEffect(this);
-    shadowEffect_testBtn->setOffset(0,0);
-    shadowEffect_testBtn->setColor(Qt::gray);
-    shadowEffect_testBtn->setBlurRadius(5);
-
-    QGraphicsDropShadowEffect *shadowEffect_WSABtn = new QGraphicsDropShadowEffect(this);
-    shadowEffect_WSABtn->setOffset(0,0);
-    shadowEffect_WSABtn->setColor(Qt::gray);
-    shadowEffect_WSABtn->setBlurRadius(5);
-
-    QGraphicsDropShadowEffect *shadowEffect_cmdBtn = new QGraphicsDropShadowEffect(this);
-    shadowEffect_cmdBtn->setOffset(0,0);
-    shadowEffect_cmdBtn->setColor(Qt::gray);
-    shadowEffect_cmdBtn->setBlurRadius(5);
-
-    QGraphicsDropShadowEffect *shadowEffect_island = new QGraphicsDropShadowEffect(this);
-    shadowEffect_island->setOffset(0,0);
-    shadowEffect_island->setColor(Qt::gray);
-    shadowEffect_island->setBlurRadius(5);
-
-    QGraphicsDropShadowEffect *shadowEffect_pluginBtn = new QGraphicsDropShadowEffect(this);
-    shadowEffect_pluginBtn->setOffset(0,0);
-    shadowEffect_pluginBtn->setColor(Qt::gray);
-    shadowEffect_pluginBtn->setBlurRadius(5);
-
-
-    QGraphicsDropShadowEffect *shadowEffect_combo = new QGraphicsDropShadowEffect(this);
-    shadowEffect_combo->setOffset(0,0);
-    shadowEffect_combo->setColor(Qt::gray);
-    shadowEffect_combo->setBlurRadius(5);
-    QGraphicsDropShadowEffect *shadowEffect_CPU = new QGraphicsDropShadowEffect(this);
-    shadowEffect_CPU->setOffset(0,0);
-    shadowEffect_CPU->setColor(Qt::gray);
-    shadowEffect_CPU->setBlurRadius(5);
-    QGraphicsDropShadowEffect *shadowEffect_RAM = new QGraphicsDropShadowEffect(this);
-    shadowEffect_RAM->setOffset(0,0);
-    shadowEffect_RAM->setColor(Qt::gray);
-    shadowEffect_RAM->setBlurRadius(5);
-
-    ui->refreshButton->setGraphicsEffect(shadowEffect_refreshButton);
-    ui->adbKillerBtn->setGraphicsEffect(shadowEffect_killAdbBtn);
-    ui->WIFIBtn->setGraphicsEffect(shadowEffect_testBtn);
-    ui->WSABtn->setGraphicsEffect(shadowEffect_WSABtn);
-    ui->cmdBtn->setGraphicsEffect(shadowEffect_cmdBtn);
-    ui->dynamic_island->setGraphicsEffect(shadowEffect_island);
-    ui->comboBox->setGraphicsEffect(shadowEffect_combo);
-    ui->widget_mon_CPU->setGraphicsEffect(shadowEffect_CPU);
-    ui->widget_mon_RAM->setGraphicsEffect(shadowEffect_RAM);
-    ui->pluginBtn->setGraphicsEffect(shadowEffect_pluginBtn);
 
     ui->comboBox->setMaxVisibleItems(1);
     ui->comboBox->view()->window()->setWindowFlags(Qt::Popup | Qt::FramelessWindowHint | Qt::NoDropShadowWindowHint);
     ui->comboBox->view()->window()->setAttribute(Qt::WA_TranslucentBackground);
     QApplication::setEffectEnabled(Qt::UI_AnimateCombo, false);
 
+    // 主窗口这 10 个控件的投影（原实现就在本函数里；§五十四 补回时曾错放到
+    // on_pluginBtn_clicked 内，导致"要点一次插件按钮才有阴影" —— 见 §六十五）。
+    const QList<QWidget *> shadowed = { ui->refreshButton, ui->adbKillerBtn, ui->WIFIBtn, ui->WSABtn,
+                                        ui->cmdBtn, ui->dynamic_island, ui->comboBox,
+                                        ui->widget_mon_CPU, ui->widget_mon_RAM, ui->pluginBtn };
+    for(QWidget *widget : shadowed)
+    {
+        applyDropShadow(widget);
+    }
 }
 
 void MainWindow::initSonPage(int key)               //槽：生成子页面
@@ -698,187 +590,54 @@ void MainWindow::initSonPage(int key)               //槽：生成子页面
 void MainWindow::on_adbKillerBtn_clicked()          //槽：杀死ADB
 {
     QMessageBox * msgBox = new QMessageBox;
+    msgBox->setAttribute(Qt::WA_DeleteOnClose);   // 关闭即删：原来弹一次泄漏一个顶层窗口
     msgBox->setWindowIcon(QIcon(":/ico/image/ico/close-circle-line.svg"));
-    msgBox->setStyleSheet("background-color:rgba(255,255,255,1);border:0px; border-radius:0px;");
-    msgBox->setWindowTitle("杀死ADB");
-    msgBox->setText("· 已尝试杀死ADB进程\n· 请勿连续执行！！！");
+    msgBox->setStyleSheet(UiStyles::kPlainDialog);
+    msgBox->setWindowTitle(tr("杀死ADB"));
+    msgBox->setText(tr("· 已尝试杀死ADB进程\n· 请勿连续执行！！！"));
     msgBox->addButton(" ✓ ", QMessageBox::AcceptRole);
     msgBox->show();
 
-    process->run("adb kill-server");
+    // 异步下发：原同步调用会阻塞界面直到命令结束
+    AdbClient::instance()->runCommand("adb kill-server");
 }
 
-void MainWindow::on_WIFIBtn_clicked()               //槽：弹出无线调试连接窗口，获取无线调试参数
-{
-    getInfo = new QWidget();
-    getInfo->setMaximumSize(500,300);
-    getInfo->setWindowTitle("无线调试");
-    getInfo->setStyleSheet("background-color:rgba(255,255,255,1);");
-    getInfo->setWindowIcon(QIcon(":/ico/image/ico/link.svg"));
-    getInfo->setWindowIconText("test");
-
-    QLabel * title = new QLabel(getInfo);
-    title->setText("通过WI-FI连接设备");
-
-    QWidget *outWgt = new QWidget(getInfo);
-    outWgt->setStyleSheet("border-radius: 4px;border:1px solid #BDBDBD;");
-    QVBoxLayout * outLayout = new QVBoxLayout();
-    QLabel * step1 = new QLabel(getInfo);
-    step1->setText("第一步：打开 [开发者选项 -> 无线调试]");
-    step1->setStyleSheet("border-radius: 4px;border-bottom:1px solid #BDBDBD;");
-    QLabel * lb_outIp = new QLabel(getInfo);
-    lb_outIp->setText("无线调试IP地址：");
-    lb_outIp->setStyleSheet("border-radius: 4px;border:0px solid #BDBDBD;");
-    QLabel * lb_outPort = new QLabel(getInfo);
-    lb_outPort->setText("无线调试端口：");
-    lb_outPort->setStyleSheet("border-radius: 4px;border:0px solid #BDBDBD;");
-
-    le_outIp = new QLineEdit(getInfo);
-    //le_outIp->setStyleSheet("border-radius: 4px;border-bottom:2px solid #146AFF;");
-    le_outPort = new QLineEdit(getInfo);
-    //le_outPort->setStyleSheet("border-radius: 4px;border-bottom:2px solid #146AFF;");
-
-
-    QWidget *inWgt = new QWidget(getInfo);
-    inWgt->setStyleSheet("border-radius: 4px;border:1px solid #BDBDBD;");
-    QVBoxLayout * inLayout = new QVBoxLayout();
-    QLabel * step2 = new QLabel(getInfo);
-    step2->setText("第二步：点击 [使用配对码配对设备]");
-    step2->setStyleSheet("border-radius: 4px;border-bottom:1px solid #BDBDBD;");
-    QLabel * lb_ipAddr = new QLabel(getInfo);
-    lb_ipAddr->setText("配对IP地址：");
-    lb_ipAddr->setStyleSheet("border-radius: 4px;border:0px solid #BDBDBD;border-bottom:2px");
-    QLabel * lb_port = new QLabel(getInfo);
-    lb_port->setText("配对端口：");
-    lb_port->setStyleSheet("border-radius: 4px;border:0px solid #BDBDBD;");
-    QLabel * lb_code = new QLabel(getInfo);
-    lb_code->setText("配对码：");
-    lb_code->setStyleSheet("border-radius: 4px;border:0px solid #BDBDBD;");
-
-    le_ipAddr = new QLineEdit(getInfo);
-    //le_ipAddr->setStyleSheet("border-radius: 4px;border-bottom:2px solid #146AFF;");
-    le_port = new QLineEdit(getInfo);
-    //le_port->setStyleSheet("border-radius: 4px;border-bottom:2px solid #146AFF;");
-    le_code = new QLineEdit(getInfo);
-    //le_code->setStyleSheet("border-radius: 4px;border-bottom:2px solid #146AFF;");
-
-    QHBoxLayout * lo_outIp = new QHBoxLayout();
-    lo_outIp->addWidget(lb_outIp);
-    lo_outIp->addWidget(le_outIp);
-    QHBoxLayout * lo_outPort = new QHBoxLayout();
-    lo_outPort->addWidget(lb_outPort);
-    lo_outPort->addWidget(le_outPort);
-
-    QHBoxLayout * lo_ipAddr = new QHBoxLayout();
-    lo_ipAddr->addWidget(lb_ipAddr);
-    lo_ipAddr->addWidget(le_ipAddr);
-    QHBoxLayout * lo_port = new QHBoxLayout();
-    lo_port->addWidget(lb_port);
-    lo_port->addWidget(le_port);
-    QHBoxLayout * lo_code = new QHBoxLayout();
-    lo_code->addWidget(lb_code);
-    lo_code->addWidget(le_code);
-
-    QPushButton * getInfoBtn = new QPushButton(getInfo);
-    getInfoBtn->setText("连接");
-    getInfoBtn->setStyleSheet("QPushButton{background-color:rgba(255,255,255,0.9);border-radius:4px;border:0px;}QPushButton:hover{background-color:rgba(255,255,255,0.7);}QPushButton:pressed{background-color:rgba(255,255,255,0.6);}");
-    QVBoxLayout * mainLayout = new QVBoxLayout(getInfo);
-
-    QGraphicsDropShadowEffect *shadowEffect_getInfoBtn = new QGraphicsDropShadowEffect(getInfo);
-    shadowEffect_getInfoBtn->setOffset(0,0);
-    shadowEffect_getInfoBtn->setColor(Qt::gray);
-    shadowEffect_getInfoBtn->setBlurRadius(5);
-
-    getInfoBtn->setGraphicsEffect(shadowEffect_getInfoBtn);
-
-    getInfo->setLayout(mainLayout);
-    mainLayout->addWidget(title);
-
-    mainLayout->addWidget(outWgt);
-
-    outWgt->setLayout(outLayout);
-    outLayout->addWidget(step1);
-    outLayout->addLayout(lo_outIp);
-    outLayout->addLayout(lo_outPort);
-
-    mainLayout->addWidget(inWgt);
-
-    inWgt->setLayout(inLayout);
-    inLayout->addWidget(step2);
-    inLayout->addLayout(lo_ipAddr);
-    inLayout->addLayout(lo_port);
-    inLayout->addLayout(lo_code);
-
-    mainLayout->addWidget(getInfoBtn);
-
-    connect(getInfoBtn,SIGNAL(clicked()),this,SLOT(connectWIFIDev()));
-    getInfo->show();
-    //qDebug() << "size is " << getInfo->geometry();
-}
-
-void MainWindow::connectWIFIDev()                   //槽：连接无线调试设备
-{
-    QString ip = le_ipAddr->text().simplified();
-    QString port = le_port->text().simplified();
-    QString outIp = le_outIp->text().simplified();
-    QString outPort = le_outPort->text().simplified();
-    QString code = le_code->text().simplified();
-    QString command_connect_to_WIFI_dev = "adb pair " + ip + ":" + port;
-
-    process->run(command_connect_to_WIFI_dev, code + "\n");
-    process->run("adb connect " + outIp + ":" + outPort);
-
-    le_ipAddr->clear();
-    le_port->clear();
-    le_code->clear();
-    le_outIp->clear();
-    le_outPort->clear();
-    getInfo->deleteLater();
-}
 
 void MainWindow::on_WSABtn_clicked()                //槽：连接WSA
 {
-    process->run("adb connect 127.0.0.1:58526");
+    AdbClient::instance()->runCommand("adb connect 127.0.0.1:58526");
 
     QMessageBox * msgBox = new QMessageBox;
+    msgBox->setAttribute(Qt::WA_DeleteOnClose);   // 关闭即删：原来弹一次泄漏一个顶层窗口
     msgBox->setWindowIcon(QIcon(":/ico/image/ico/link.svg"));
-    msgBox->setStyleSheet("background-color:rgba(255,255,255,1);border:0px; border-radius:0px;");
+    msgBox->setStyleSheet(UiStyles::kPlainDialog);
     msgBox->setWindowTitle("WSA");
-    msgBox->setText("· 已尝试连接，请刷新设备列表并选择WSA\n· 请谨慎对WSA使用某些功能");
+    msgBox->setText(tr("· 已尝试连接，请刷新设备列表并选择WSA\n· 请谨慎对WSA使用某些功能"));
     msgBox->addButton(" ✓ ", QMessageBox::AcceptRole);
     msgBox->show();
 }
 
 void MainWindow::slot_taiChi()
 {
-    //qDebug() <<"taiChi -" << taiChi;
-    /*
-    if(taiChi)
-    {
-        this->resize(this->geometry().width() + 5,this->geometry().height());
-    }
-    else
-    {
-        this->resize(this->geometry().width() - 5,this->geometry().height());
-    }*/
     taiChi = !taiChi;
-    //currentPage->resize(1,1);
-    delete taiChiTimer;
-    taiChiTimer = NULL;
+    // 本槽正是在定时器的 timeout 信号里被调用的：直接 delete 会销毁"正在发信号的对象"，
+    // 改用 deleteLater()，并把成员置空（否则下一次 initBasePage 会看到悬垂指针）。
+    if(taiChiTimer != nullptr)
+    {
+        taiChiTimer->deleteLater();
+        taiChiTimer = nullptr;
+    }
 
     if(ui->comboBox->currentIndex() != -1)
     {
         this->unlock();
-        //currentPage->setDisabled(false);
     }
-    //this->setEnabled(true);
 }
 
 void MainWindow::on_cmdBtn_clicked()
 {
     QString appDirPath = QApplication::applicationDirPath();
     QString batPath = appDirPath + "/Resources/platform-tools/open-cmd-here.bat";
-    //qDebug()<<"batPath = " << batPath;
     QProcess batProcess;
     batProcess.start(batPath);
     batProcess.waitForFinished();
@@ -886,12 +645,10 @@ void MainWindow::on_cmdBtn_clicked()
 
 void MainWindow::DevicePlugIn()
 {
-    qDebug() << "DevicePlugIn";
 }
 
 void MainWindow::DevicePlugOut()
 {
-    qDebug() << "DevicePlugout";
 }
 
 void MainWindow::DeviceChanged()
@@ -902,13 +659,8 @@ void MainWindow::DeviceChanged()
     }
     else
     {
-        QMessageBox::StandardButton result=QMessageBox::warning(NULL, "检测到USB热插拔","您可能插入或拔出了一台ADB设备\n"
-                                                                                   "将对设备列表进行刷新\n"
-                                                                                   "（⚠️这会中断当前正在执行的任务）");
+        QMessageBox::StandardButton result=QMessageBox::warning(NULL, tr("检测到USB热插拔"),tr("您可能插入或拔出了一台ADB设备\n将对设备列表进行刷新\n（⚠️这会中断当前正在执行的任务）"));
 
-        //msgBox->setStyleSheet("background-color:rgba(255,255,255,1);border:0px; border-radius:0px;");
-        //QMessageBox::StandardButton result=QMessageBox::warning(this, "Title","text");
-        //qDebug() << "result =" << result;
         if(result)
         {
             //这里要delete adbprocess
@@ -918,13 +670,11 @@ void MainWindow::DeviceChanged()
         {
 
         }
-        //qDebug() << "DeviceChanged";
     }
 }
 
 void MainWindow::slot_refreshDevList()
 {
-    //qDebug() << "slot_refreshDevList";
     liangYi = true;
     refreshDevList();
 }
@@ -932,99 +682,32 @@ void MainWindow::slot_refreshDevList()
 
 void MainWindow::refreshDevListLater()
 {
-
-    qDebug() << ">>>>>>>>>>>>>>>>>>>>>>refreshDevListLater";
-    QTimer *timer = new QTimer();
-    connect(timer, SIGNAL(timeout()), this, SLOT(slot_refreshDevList()));
+    // 延迟 1 秒再刷新：给系统枚举新设备留出时间。
+    // 原实现每次都 new 一个 QTimer 且从不释放（deleteLater 那行被注释掉了），
+    // 每来一次热插拔事件就泄漏一个定时器；这里挂到 this 上并在触发后释放。
+    QTimer *timer = new QTimer(this);
     timer->setSingleShot(true);
+    connect(timer, &QTimer::timeout, this, [this, timer]() {
+        timer->deleteLater();
+        slot_refreshDevList();
+    });
     timer->start(1000);
-    //timer->deleteLater();
 }
 
 void MainWindow::slot_update_monitor(float cpu_useage, float mem_useage)
 {
-    //qDebug() << "cpu_useage is " <<cpu_useage ;
-    //qDebug() << "mem_useage" << mem_useage;
 
     int cpu_credit = (int)(cpu_useage*100);
-    //qDebug() << "cpu_credit" << cpu_credit;
     ui->progressBar_CPU->setValue(cpu_credit);
 
     int mem_credit = (int)(mem_useage*100);
-    //qDebug() << "mem_credit" << mem_credit;
     ui->progressBar_RAM->setValue(mem_credit);
 }
 
 void MainWindow::reset_monitorBars()
 {
-    //qDebug() << "reset";
     ui->progressBar_CPU->setValue(0);
     ui->progressBar_RAM->setValue(0);
 }
 
-void MainWindow::on_pluginBtn_clicked()
-{
-    magiskSaver = new QWidget();
-    magiskSaver->setMaximumSize(500,300);
-    magiskSaver->setWindowTitle("Magisk救砖");
-    magiskSaver->setStyleSheet("background-color:rgba(255,255,255,1);");
-    magiskSaver->setWindowIcon(QIcon(":/ico/image/ico/magisk.png"));
-    //magiskSaver->setWindowIconText("test");
 
-    QLabel * title = new QLabel(magiskSaver);
-    title->setText("在开机前禁用所有 Magisk 模块");
-
-    QWidget *saveWgt = new QWidget(magiskSaver);
-    saveWgt->setStyleSheet("border-radius: 4px;border:1px solid #BDBDBD;");
-    QVBoxLayout * saveLayout = new QVBoxLayout();
-    QLabel * profile = new QLabel(magiskSaver);
-    profile->setText("请按照以下步骤操作");
-    profile->setStyleSheet("border-radius: 4px;border-bottom:1px solid #BDBDBD;");
-    QLabel * step1 = new QLabel(magiskSaver);
-    step1->setText("1. 断开所有设备的连接，将不断重启的手机关机，或等待它的下一次重启。");
-    step1->setStyleSheet("border-radius: 4px;border:0px solid #BDBDBD;");
-    step1->setWordWrap(true);
-    QLabel * step2 = new QLabel(magiskSaver);
-    step2->setText("2. 点按救砖按钮。（接下来您无需再对电脑进行操作）");
-    step2->setStyleSheet("border-radius: 4px;border:0px solid #BDBDBD;");
-    step2->setWordWrap(true);
-    QLabel * step3 = new QLabel(magiskSaver);
-    step3->setText("3. 将手机开机，尽量在开机进入第一屏时连接数据线。");
-    step3->setStyleSheet("border-radius: 4px;border:0px solid #BDBDBD;");
-    step3->setWordWrap(true);
-
-
-    QPushButton * saveBtn = new QPushButton(magiskSaver);
-    saveBtn->setText("");
-    saveBtn->setCheckable(false);
-    saveBtn->setIcon(QIcon(":/ico/image/ico/play-line.svg"));
-    saveBtn->setStyleSheet("QPushButton{background-color:rgba(255,255,255,0.9);border-radius:4px;border:0px;}QPushButton:hover{background-color:rgba(255,255,255,0.7);}QPushButton:pressed{background-color:rgba(255,255,255,0.6);}");
-    QVBoxLayout * mainLayout = new QVBoxLayout(magiskSaver);
-
-    QGraphicsDropShadowEffect *shadowEffect_getInfoBtn = new QGraphicsDropShadowEffect(magiskSaver);
-    shadowEffect_getInfoBtn->setOffset(0,0);
-    shadowEffect_getInfoBtn->setColor(Qt::gray);
-    shadowEffect_getInfoBtn->setBlurRadius(5);
-
-    saveBtn->setGraphicsEffect(shadowEffect_getInfoBtn);
-
-    magiskSaver->setLayout(mainLayout);
-    mainLayout->addWidget(title);
-
-    mainLayout->addWidget(saveWgt);
-
-    saveWgt->setLayout(saveLayout);
-    saveLayout->addWidget(profile);
-    saveLayout->addWidget(step1);
-    saveLayout->addWidget(step2);
-    saveLayout->addWidget(step3);
-    mainLayout->addWidget(saveBtn);
-
-    connect(saveBtn,SIGNAL(clicked()),this,SLOT(slot_save_magisk()));
-    magiskSaver->show();
-}
-
-void MainWindow::slot_save_magisk()
-{
-    qDebug() << "magisk救砖输出" << process->run("adb wait-for-device shell magisk --remove-modules");
-}

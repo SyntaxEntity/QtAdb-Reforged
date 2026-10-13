@@ -1,5 +1,6 @@
 #include "pagelistitem.h"
 #include "ui_pagelistitem.h"
+#include "uishadow.h"
 
 pageListItem::pageListItem(QWidget *parent) :
     QWidget(parent),
@@ -46,28 +47,13 @@ void pageListItem::on_copyButton_clicked()
     QClipboard *clip = QApplication::clipboard();
     clip->setText(ui->profile->text());
 
-    /*
-    QMessageBox *msgBox = new QMessageBox;
-    msgBox->setWindowIcon(QIcon(":/ico/image/ico/link.svg"));
-    msgBox->setStyleSheet("background-color:rgba(255,255,255,1);border:0px; border-radius:0px;");
-    msgBox->setWindowTitle("复制到剪贴板");
-    msgBox->setText("·已将文本\n" + ui->profile->text() + "\n复制到剪贴板");
-    msgBox->addButton(" ✓ ", QMessageBox::AcceptRole);
-    msgBox->show();
-**/
-    qDebug() << "msgBox poped";
     noticeWidget *notWgt = new noticeWidget(nullptr);
-    qDebug() << "not inited";
-    notWgt->popUp("已将文本\n" + ui->profile->text() + "\n复制到剪贴板");
-    qDebug() << "not poped";
+    notWgt->popUp(tr("已将文本\n") + ui->profile->text() + tr("\n复制到剪贴板"));
 }
 
 void pageListItem::setSelectable()
 {
     ui->enableLight->setVisible(true);
-    isSelectable = true;
-    //shadowEffect_icon->setColor(Qt::green);
-    //ui->pic->setStyleSheet("QPushButton{background-color:rgba(255,255,255,255);border-radius:4px;border:1px solid #BDBDBD;}");
 }
 
 void pageListItem::slot_setText(QString t, QString p)
@@ -88,21 +74,7 @@ void pageListItem::slot_setText_profile(QString p)
 void pageListItem::setStyles()
 {
 
-    QGraphicsDropShadowEffect *shadowEffect = new QGraphicsDropShadowEffect(this);
-    shadowEffect->setOffset(0,0);
-    shadowEffect->setColor(Qt::gray);
-    shadowEffect->setBlurRadius(5);
-    ui->enableLight->setGraphicsEffect(shadowEffect);
-/*
-    QGraphicsOpacityEffect *graphicsOpacityEffect = new QGraphicsOpacityEffect(this);
-    graphicsOpacityEffect->setOpacity(1.0);
-    ui->pic->setGraphicsEffect(graphicsOpacityEffect);
-
-    shadowEffect_icon = new QGraphicsDropShadowEffect(this);
-    shadowEffect_icon->setOffset(0,0);
-    shadowEffect_icon->setColor(Qt::gray);
-    shadowEffect_icon->setBlurRadius(5);
-    ui->pic->setGraphicsEffect(shadowEffect_icon);*/
+    applyDropShadow(ui->enableLight);
 }
 
 void pageListItem::slot_setStyles()

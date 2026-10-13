@@ -1,5 +1,9 @@
 #include "sp_libraries.h"
 #include "ui_sp_libraries.h"
+#include "qssloader.h"
+#include "textexplainer.h"
+#include "adbcommands.h"
+#include "uishadow.h"
 
 sp_libraries::sp_libraries(QWidget *parent) :
     animationWidget(parent),
@@ -11,28 +15,19 @@ sp_libraries::sp_libraries(QWidget *parent) :
     ui->progressBar->hide();
     ui->listView->setEditTriggers(QAbstractItemView::NoEditTriggers);
 
-    thread = new adbThread();
+    thread = new adbThread(this);
     connect(this->ui->back_to_basePage,SIGNAL(clicked()),parent,SLOT(slot_destroySonPage()));
 
     connect(thread,SIGNAL(signal_output(QString)),this,SLOT(refresh_tableView(QString)));
 
-    QGraphicsDropShadowEffect *shadowEffect_back_to_basePage = new QGraphicsDropShadowEffect(this);
-    QGraphicsDropShadowEffect *shadowEffect_refreshBtn = new QGraphicsDropShadowEffect(this);
 
-    shadowEffect_back_to_basePage->setOffset(0,0);
-    shadowEffect_back_to_basePage->setColor(Qt::gray);
-    shadowEffect_back_to_basePage->setBlurRadius(5);
 
-    shadowEffect_refreshBtn->setOffset(0,0);
-    shadowEffect_refreshBtn->setColor(Qt::gray);
-    shadowEffect_refreshBtn->setBlurRadius(5);
 
-    ui->back_to_basePage->setGraphicsEffect(shadowEffect_back_to_basePage);
-    ui->refreshBtn->setGraphicsEffect(shadowEffect_refreshBtn);
+    applyDropShadow(ui->back_to_basePage);
+    applyDropShadow(ui->refreshBtn);
 
-    QFile file("://qss/scrollbar.qss");
-    file.open(QFile::ReadOnly);
-    ui->listView->verticalScrollBar()->setStyleSheet(file.readAll());
+    // 读取失败时给出警告并跳过（原实现不检查 QFile::open 的返回值）
+    applyScrollBarStyle(ui->listView);
 
 }
 
@@ -43,37 +38,43 @@ sp_libraries::~sp_libraries()
 
 void sp_libraries::on_refreshBtn_clicked()
 {
-    thread->initThread("adb shell pm list features",dev,"#PERMISSIONGROUPS#");
+    // 原实现执行的是 "pm list features"，与 sp_features 页面完全相同，
+    // 而本页标题是"当前设备支持的所有库" → 显示的是特性列表（数据错误）。
+    thread->initThread(AdbCmd::pmList("libraries"),dev,"#PERMISSIONGROUPS#");
     ui->progressBar->setVisible(true);
     thread->start();
 }
 
 void sp_libraries::refresh_tableView(QString s)
 {
-    QStandardItemModel* emptyModel = new QStandardItemModel(this);
-    ui->listView->setModel(emptyModel);
-    //thread->exit();
-    //qDebug() << "before";
-    QStringList permissionList = explainer->explainPermissionGroups(s);
-    //qDebug() << "after";
-    QStandardItemModel* model = new QStandardItemModel(this);
+    QStringList permissionList = explainer.explainPermissionGroups(s);
     if(!permissionList.isEmpty())
     {
+        // 模型只在实际有数据时创建：原实现在判断之前就 new，
+        // 列表为空时既不安装也不释放，于是每次刷新泄漏一个模型
+        // （--repeat 探针在 sp_accounts 上实测到 6 次刷新漏 6 个）。
+        QStandardItemModel* model = new QStandardItemModel(this);
         for(int i = 0; i < permissionList.count(); i++)
         {
             QStringList tmpList;
             tmpList = permissionList[i].split(":");
-            //qDebug() << "permissionList.count() = " << permissionList.count() <<"\nbefore index out of range: \n i = " << i << "\n permissionList[i] = "<< permissionList[i];
             if(tmpList.count() >= 2)
             {
                 model->setItem(i,0,new QStandardItem(tmpList[1]));
             }
         }
-        ui->listView->setModel(model);
+        installTableModel(ui->listView, model);
         this->update();
     }
     ui->progressBar->setVisible(false);
-    delete emptyModel;
+
+    // 数据为空时也要让视图有个（空）模型：同样走 installTableModel()，
+    // 上一个模型由助手释放。每轮刷新只调用一次 setModel —— 次数越少，
+    // 视图重建选择模型的次数越少（选择模型要等页面销毁才回收）。
+    if(ui->listView->model() == nullptr)
+    {
+        installTableModel(ui->listView, new QStandardItemModel(this));
+    }
 }
 
 void sp_libraries::setDev(device device)

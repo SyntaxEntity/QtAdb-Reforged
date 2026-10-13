@@ -4,7 +4,6 @@
 #include <QWidget>
 #include <QGraphicsDropShadowEffect>
 
-#include "adbprocess.h"
 #include "textexplainer.h"
 #include "../../animationwidget.h"
 
@@ -20,8 +19,7 @@ public:
     explicit sp_wmsize(QWidget *parent = nullptr);
     ~sp_wmsize();
 
-    adbProcess *process;
-    textExplainer *explainer;
+    textExplainer *explainer = nullptr;
     device dev;
 
     void setDev(device device);
@@ -31,7 +29,7 @@ private slots:
     void on_refreshBtn_clicked();
 
 private:
-    Ui::sp_wmsize *ui;
+    Ui::sp_wmsize *ui = nullptr;
     void setWmInfo();
     void refresh();
 

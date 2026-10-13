@@ -17,7 +17,7 @@ public:
     ~welcomePage();
 
 private:
-    Ui::welcomePage *ui;
+    Ui::welcomePage *ui = nullptr;
 };
 
 #endif // WELCOMEPAGE_H

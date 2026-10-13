@@ -4,7 +4,6 @@
 #include <QWidget>
 #include <QGraphicsDropShadowEffect>
 #include "textexplainer.h"
-#include "adbprocess.h"
 #include "../../animationwidget.h"
 
 namespace Ui {
@@ -19,8 +18,7 @@ public:
     explicit btnEmulator(QWidget *parent = nullptr);
     ~btnEmulator();
 
-    adbProcess* process;
-    textExplainer* explainer;
+    textExplainer* explainer = nullptr;
     device dev;
     void setDev(device device);
     void setShadow(QWidget* wgt);
@@ -86,7 +84,7 @@ private slots:
     void on_btn_calc_clicked();
 
 private:
-    Ui::btnEmulator *ui;
+    Ui::btnEmulator *ui = nullptr;
 };
 
 #endif // BTNEMULATOR_H

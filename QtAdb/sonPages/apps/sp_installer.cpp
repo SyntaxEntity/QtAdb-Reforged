@@ -1,5 +1,8 @@
 #include "sp_installer.h"
 #include "ui_sp_installer.h"
+#include <QDir>
+#include "textexplainer.h"
+#include "uishadow.h"
 
 sp_installer::sp_installer(QWidget *parent) :
     animationWidget(parent),
@@ -11,57 +14,30 @@ sp_installer::sp_installer(QWidget *parent) :
     this->repaint();
     parent->repaint();
 
-    process = new adbProcess();
-    thread = new adbThread();
+    thread = new adbThread(this);
+
+    // 连接只建立一次。原实现把它写在点击槽里：每点一次"安装"就多加一条连接，
+    // 于是同一个输出会被处理多次（stop_progressBar 被反复调用）。
+    connect(thread,SIGNAL(signal_output(QString)),this,SLOT(stop_progressBar(QString)));
 
     connect(this->ui->back_to_basePage,SIGNAL(clicked()),parent,SLOT(slot_destroySonPage()));
 
-    QGraphicsDropShadowEffect *shadowEffect_runBtn = new QGraphicsDropShadowEffect(this);
-    //QGraphicsDropShadowEffect *shadowEffect_showOutputBtn = new QGraphicsDropShadowEffect(this);
-    QGraphicsDropShadowEffect *shadowEffect_back_to_basePage = new QGraphicsDropShadowEffect(this);
-    //QGraphicsDropShadowEffect *shadowEffect_refreshBtn = new QGraphicsDropShadowEffect(this);
-    QGraphicsDropShadowEffect *shadowEffect_selectBtn = new QGraphicsDropShadowEffect(this);
-    QGraphicsDropShadowEffect *shadowEffect_tips = new QGraphicsDropShadowEffect(this);
 
-    shadowEffect_runBtn->setOffset(0,0);
-    shadowEffect_runBtn->setColor(Qt::gray);
-    shadowEffect_runBtn->setBlurRadius(5);
 
-    /*
-    shadowEffect_showOutputBtn->setOffset(0,0);
-    shadowEffect_showOutputBtn->setColor(Qt::gray);
-    shadowEffect_showOutputBtn->setBlurRadius(5);*/
 
-    shadowEffect_back_to_basePage->setOffset(0,0);
-    shadowEffect_back_to_basePage->setColor(Qt::gray);
-    shadowEffect_back_to_basePage->setBlurRadius(5);
 
-    /*
-    shadowEffect_refreshBtn->setOffset(0,0);
-    shadowEffect_refreshBtn->setColor(Qt::gray);
-    shadowEffect_refreshBtn->setBlurRadius(5);*/
 
-    shadowEffect_selectBtn->setOffset(0,0);
-    shadowEffect_selectBtn->setColor(Qt::gray);
-    shadowEffect_selectBtn->setBlurRadius(5);
 
-    shadowEffect_tips->setOffset(0,0);
-    shadowEffect_tips->setColor(Qt::green);
-    shadowEffect_tips->setBlurRadius(5);
 
-    ui->back_to_basePage->setGraphicsEffect(shadowEffect_back_to_basePage);
-    ui->runBtn->setGraphicsEffect(shadowEffect_runBtn);
-    //ui->showOutputBtn->setGraphicsEffect(shadowEffect_showOutputBtn);
-    //ui->refreshBtn->setGraphicsEffect(shadowEffect_refreshBtn);
-    ui->selectBtn->setGraphicsEffect(shadowEffect_selectBtn);
-    ui->tips->setGraphicsEffect(shadowEffect_tips);
+    applyDropShadow(ui->back_to_basePage);
+    applyDropShadow(ui->runBtn);
 
-    /*
-    QGraphicsDropShadowEffect *shadowEffect_widget = new QGraphicsDropShadowEffect();
-    shadowEffect_widget->setOffset(0,0);
-    shadowEffect_widget->setColor(Qt::gray);
-    shadowEffect_widget->setBlurRadius(5);
-    ui->widget->setGraphicsEffect(shadowEffect_widget);*/
+
+
+    // 补回：第 48 轮的批量替换只删未加，丢掉了这一处阴影（见 §六十）
+    applyDropShadow(ui->selectBtn);
+    // 补回：第 48 轮的批量替换只删未加，丢掉了这一处阴影（见 §六十）
+    applyDropShadow(ui->tips, Qt::green);
 
 }
 
@@ -76,7 +52,6 @@ void sp_installer::setDev(device device)
 }
 void sp_installer::on_runBtn_clicked()
 {
-    //qDebug() << "enter runBtn slot";
     QString command;
     if(apkPath != "")
     {
@@ -89,11 +64,9 @@ void sp_installer::on_runBtn_clicked()
 
 
     thread->initThread(command,dev,"#INSTALL#");
-    connect(thread,SIGNAL(signal_output(QString)),this,SLOT(stop_progressBar(QString)));
     thread->start();
     ui->progressBar->show();
     this->setDisabled(true);
-    //process->run_contains_empty(command, dev);
     apkPath.clear();
     labelDisplay.clear();
     ui->filePaths->clear();
@@ -101,13 +74,11 @@ void sp_installer::on_runBtn_clicked()
 
 void sp_installer::on_selectBtn_clicked()
 {
-    //qDebug() << "enter pushbutton slot";
     apkPath.clear();
-    apkPath = QFileDialog::getOpenFileName(this, QStringLiteral("选择安装包"), "F:",QStringLiteral("安装包(*.apk)"));
+    apkPath = QFileDialog::getOpenFileName(this, tr("选择安装包"), QDir::homePath(), tr("安装包(*.apk)"));
 
     ui->filePaths->setText(apkPath);
 
-    //qDebug() << "apkPathis:" << apkPath;
 }
 
 void sp_installer::stop_progressBar(QString str)
@@ -116,12 +87,12 @@ void sp_installer::stop_progressBar(QString str)
     {
         ui->progressBar->hide();
         this->setEnabled(true);
-        ui->filePaths->setText("安装成功");
+        ui->filePaths->setText(tr("安装成功"));
     }
     else
     {
         ui->progressBar->hide();
         this->setEnabled(true);
-        ui->filePaths->setText("出错");
+        ui->filePaths->setText(tr("出错"));
     }
 }

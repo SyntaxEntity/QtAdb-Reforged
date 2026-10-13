@@ -3,7 +3,6 @@
 
 #include <QWidget>
 #include <QGraphicsDropShadowEffect>
-#include "../../adbprocess.h"
 #include "../../animationwidget.h"
 
 namespace Ui {
@@ -22,8 +21,7 @@ private slots:
     void on_runBtn_clicked();
 
 private:
-    Ui::sp_customize_cmd *ui;
-    adbProcess *process;
+    Ui::sp_customize_cmd *ui = nullptr;
 };
 
 #endif // SP_CUSTOMIZE_CMD_H

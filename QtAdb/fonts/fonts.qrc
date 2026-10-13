@@ -1,7 +1,11 @@
 <RCC>
+    <!-- 仅嵌入实际使用的 Regular 字重：main.cpp 通过
+         QFontDatabase::addApplicationFont(":/LXGW/LXGWWenKaiLite-Regular.ttf") 注册，
+         并以 "LXGW WenKai Lite" 作为应用字体。
+         原 Bold / Light 两个字重（合计 21.2 MiB）从未被任何代码注册或引用，
+         已从资源与仓库中移除；如需恢复可用 git checkout 取回上一版本。
+         字体许可为 SIL OFL 1.1，见同目录 License.txt。 -->
     <qresource prefix="/LXGW">
-        <file>LXGWWenKaiLite-Bold.ttf</file>
-        <file>LXGWWenKaiLite-Light.ttf</file>
         <file>LXGWWenKaiLite-Regular.ttf</file>
     </qresource>
 </RCC>

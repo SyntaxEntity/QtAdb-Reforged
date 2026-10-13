@@ -4,9 +4,7 @@
 #include <QWidget>
 #include <QGraphicsDropShadowEffect>
 #include <QTimer>
-#include <Windows.h>
 #include "../../textexplainer.h"
-#include "../../adbprocess.h"
 #include "../../threads/adbthread.h"
 #include "../../animationwidget.h"
 
@@ -27,13 +25,11 @@ public:
     void setDevice(device d);
 
 private:
-    Ui::tp_packageProfile *ui;
+    Ui::tp_packageProfile *ui = nullptr;
 
-    adbThread * thread_file;
-    adbThread * thread_installer;
-    adbThread * thread_btn;
-    adbProcess * process;
-    textExplainer *explainer;
+    adbThread * thread_file = nullptr;
+    adbThread * thread_installer = nullptr;
+    textExplainer *explainer = nullptr;
 
     void setShadow(QWidget* wgt);
 

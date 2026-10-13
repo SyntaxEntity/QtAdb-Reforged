@@ -22,9 +22,6 @@ public:
 
     void setUpList(QList<device>, QList<int> off);
 
-    QStringList nameList[2];
-    QStringList name;
-    QStringList addr;
 
 signals:
 
@@ -32,7 +29,7 @@ private slots:
     void addName(QString addr,QString name);
 
 private:
-    textExplainer *explainer;
+    textExplainer *explainer = nullptr;
 
     //QFile *file;
 
