@@ -102,6 +102,7 @@ QTCONF
 mkdir -p %{buildroot}%{appdir}/lib %{buildroot}%{appdir}/plugins
 plugin_src=%{qt_prefix}/lib64/qt6/plugins
 for p in platforms/libqwayland.so platforms/libqxcb.so \
+         platforms/libqoffscreen.so platforms/libqminimal.so \
          iconengines/libqsvgicon.so \
          imageformats/libqsvg.so imageformats/libqjpeg.so imageformats/libqgif.so imageformats/libqico.so; do
     install -D -m 0755 "$plugin_src/$p" "%{buildroot}%{appdir}/plugins/$p"
@@ -132,11 +133,23 @@ install -D -m 0644 QtAdb/packaging/io.github.syntaxentity.QtAdbReforged.metainfo
 install -D -m 0644 QtAdb/image/ico/logo.svg \
     "%{buildroot}%{_datadir}/icons/hicolor/scalable/apps/qtadb-reforged.svg"
 
-# ⑥ /usr/bin 下的入口（相对符号链接；applicationDirPath() 会解析到包目录，
-#    因此内置 adb 与 Qt 插件都能被找到）
+# ⑥ /usr/bin 下的入口：一层极薄的启动器（不是符号链接）。
+#    原因：RUNPATH 只对"包含它的那个对象"生效，经插件间接拉起的 Qt 库
+#    （实测 libQt6DBus）会绕过包内 lib/ 落到系统的 /lib64。启动器显式设定
+#    LD_LIBRARY_PATH 与 QT_PLUGIN_PATH，保证全部 Qt 库与插件都来自包内；
+#    它 exec 的是真实可执行文件，因此 applicationDirPath() 仍是包目录，
+#    内置 adb 与插件都能就地找到。
+rel="$(realpath --relative-to="%{buildroot}%{_bindir}" "%{buildroot}%{appdir}")"
 mkdir -p "%{buildroot}%{_bindir}"
-ln -s "$(realpath --relative-to="%{buildroot}%{_bindir}" "%{buildroot}%{appdir}")/QtAdb" \
-      "%{buildroot}%{_bindir}/QtAdb"
+cat > "%{buildroot}%{_bindir}/QtAdb" <<WRAPPER
+#!/bin/sh
+# QtAdb-Reforged 启动器（由 RPM 生成；包内自包含）
+appdir=\$(cd "\$(dirname "\$(readlink -f "\$0")")/$rel" && pwd)
+export LD_LIBRARY_PATH="\$appdir/lib\${LD_LIBRARY_PATH:+:\$LD_LIBRARY_PATH}"
+export QT_PLUGIN_PATH="\$appdir/plugins"
+exec "\$appdir/QtAdb" "\$@"
+WRAPPER
+chmod 0755 "%{buildroot}%{_bindir}/QtAdb"
 
 # ⑦ 许可证与文档：显式装到标准位置（不依赖各 RPM 版本间有差异的 %license 自动归位语义）
 licdir="%{buildroot}%{_datadir}/licenses/%{name}"
