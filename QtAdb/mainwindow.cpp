@@ -537,7 +537,8 @@ void MainWindow::unlock()                           //方法：解锁mainwindow�
 
 void MainWindow::setStyles()                        //方法：设置样式
 {
-    setWindowTitle("QtAdb");
+    // 仓库名带 -Reforged 以区分上游；可执行文件仍叫 QtAdb（配置目录因此保持不变）
+    setWindowTitle("QtAdb Reforged");
     setWindowIcon(QIcon(":/ico/image/ico/logo.svg"));
 
     this->setWindowOpacity(0.99);
