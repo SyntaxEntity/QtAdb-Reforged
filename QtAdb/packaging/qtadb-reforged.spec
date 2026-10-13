@@ -126,7 +126,17 @@ install -D -m 0644 QtAdb/image/ico/logo.svg \
 mkdir -p "%{buildroot}%{_bindir}"
 ln -s %{appdir}/QtAdb "%{buildroot}%{_bindir}/QtAdb"
 
-# ⑦ 许可证与文档：交给 %license / %doc 处理（见 %files
+# ⑦ 许可证与文档：显式装到标准位置（不依赖各 RPM 版本间有差异的 %license 自动归位语义）
+licdir="%{buildroot}%{_datadir}/licenses/%{name}"
+docdir="%{buildroot}%{_datadir}/doc/%{name}"
+install -D -m 0644 LICENSE                               "$licdir/LICENSE"
+install -D -m 0644 QtAdb/packaging/licenses/LGPL-3.0-only.txt "$licdir/LICENSE.LGPL-3.0"
+install -D -m 0644 QtAdb/packaging/licenses/GPL-3.0-only.txt  "$licdir/LICENSE.GPL-3.0"
+install -D -m 0644 %{SOURCE2}                            "$licdir/NOTICE-platform-tools.txt"
+install -D -m 0644 README.md                             "$docdir/README.md"
+install -D -m 0644 docs/AI-REFACTOR-AUDIT.md             "$docdir/AI-REFACTOR-AUDIT.md"
+
+%files
 %license %{_datadir}/licenses/%{name}/LICENSE
 %license %{_datadir}/licenses/%{name}/LICENSE.LGPL-3.0
 %license %{_datadir}/licenses/%{name}/LICENSE.GPL-3.0
