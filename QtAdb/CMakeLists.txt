@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.21)
 
-project(QtAdb VERSION 1.7 LANGUAGES CXX)
+project(QtAdb VERSION 2.0.0 LANGUAGES CXX)
 
 # Qt 6 强制要求 C++17。原 qmake 工程的 `CONFIG += c++11` 会让 Qt6 直接报
 # qcompilerdetection.h: #error "Qt requires a C++17 compiler"。

@@ -283,7 +283,7 @@ Your current path is:
     </message>
     <message>
         <location filename="../about.ui" line="192" />
-        <source>beta-v1.7</source>
+        <source>v2.0.0</source>
         <translation type="unfinished" />
     </message>
     <message>

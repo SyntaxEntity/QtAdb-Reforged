@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.syntaxentity.QtAdbReforged</id>
+  <name>QtAdb Reforged</name>
+  <summary>Graphical front-end for adb (Android Debug Bridge)</summary>
+  <summary xml:lang="zh_CN">adb（Android 调试桥）的图形前端</summary>
+  <description>
+    <p>
+      QtAdb Reforged is the continuation of QtAdb by the same author: a Qt 6 desktop tool that
+      bundles its own adb lookup and turns common adb operations into a GUI — device information,
+      package management, permission listing, activation helpers, key emulation and more.
+    </p>
+    <p>
+      This release is a code rebuild (91 rounds of AI-assisted refactoring) rather than a feature
+      release: the aim was robustness, maintainability, extensibility and readability.
+    </p>
+  </description>
+  <launchable type="desktop-id">qtadb-reforged.desktop</launchable>
+  <url type="homepage">https://github.com/SyntaxEntity/QtAdb-Reforged</url>
+  <url type="bugtracker">https://github.com/SyntaxEntity/QtAdb-Reforged/issues</url>
+  <translation type="gettext">QtAdb</translation>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="2.0.0" date="2025-10-13">
+      <description>
+        <p>First packaged Linux build: self-contained Qt 6 bundle plus the official Linux adb.</p>
+      </description>
+    </release>
+  </releases>
+  <provides>
+    <binary>QtAdb</binary>
+  </provides>
+</component>

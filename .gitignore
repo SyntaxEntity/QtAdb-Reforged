@@ -48,3 +48,7 @@ qrc_*.cpp
 core
 core.*
 *.log
+
+# 打包：下载的 platform-tools 与本地 rpmbuild 树不入库
+packaging/platform-tools-linux/
+packaging/rpmbuild/

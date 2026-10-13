@@ -189,7 +189,7 @@ QToolTip{border:1px solid #BDBDBD; background-color: #ffffff; color:rgba(117, 11
              </font>
             </property>
             <property name="text">
-             <string>beta-v1.7</string>
+             <string>v2.0.0</string>
             </property>
            </widget>
           </item>

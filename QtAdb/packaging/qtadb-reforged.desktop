@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Name=QtAdb Reforged
+Name[zh_CN]=QtAdb Reforged
+GenericName=Android Debug Bridge GUI
+GenericName[zh_CN]=Android 调试桥图形界面
+Comment=Graphical front-end for adb: device info, app management, activation helpers
+Comment[zh_CN]=adb 图形前端：设备信息、软件包管理、激活辅助
+Exec=QtAdb
+Icon=qtadb-reforged
+Terminal=false
+Categories=Development;Utility;
+Keywords=adb;android;debug;device;
+StartupNotify=true
