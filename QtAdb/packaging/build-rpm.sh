@@ -11,7 +11,7 @@ set -euo pipefail
 
 here="$(cd "$(dirname "$0")" && pwd)"
 root="$(cd "$here/../.." && pwd)"       # 仓库根（packaging/ 在 QtAdb/ 下）
-topdir="${1:-$root/packaging/rpmbuild}"
+topdir="${1:-$here/rpmbuild}"   # 放在已忽略的 packaging/rpmbuild/ 下
 
 # 本机的 cmake 与 Qt 都在私有前缀里，且 cmake 需要 LD_LIBRARY_PATH 才能运行
 QT_PREFIX="${QT_PREFIX:-$HOME/.local/qt6-prefix/usr}"

@@ -18,7 +18,7 @@
   <launchable type="desktop-id">qtadb-reforged.desktop</launchable>
   <url type="homepage">https://github.com/SyntaxEntity/QtAdb-Reforged</url>
   <url type="bugtracker">https://github.com/SyntaxEntity/QtAdb-Reforged/issues</url>
-  <translation type="gettext">QtAdb</translation>
+  <project_license>MIT AND LGPL-3.0-or-later AND Apache-2.0</project_license>
   <content_rating type="oars-1.1"/>
   <releases>
     <release version="2.0.0" date="2025-10-13">

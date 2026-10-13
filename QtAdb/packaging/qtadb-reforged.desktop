@@ -9,6 +9,6 @@ Comment[zh_CN]=adb 图形前端：设备信息、软件包管理、激活辅助
 Exec=QtAdb
 Icon=qtadb-reforged
 Terminal=false
-Categories=Development;Utility;
+Categories=Development;
 Keywords=adb;android;debug;device;
 StartupNotify=true

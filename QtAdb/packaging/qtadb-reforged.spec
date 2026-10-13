@@ -12,6 +12,9 @@
 
 # 包内 Qt 库是随包分发的（不依赖发行版的 qt6-qtbase），因此必须屏蔽自动生成的
 # Requires/Provides —— 否则 RPM 会去依赖系统 Qt，bundling 就失去意义了。
+# 发布版不需要 debuginfo/debugsource 子包
+%global debug_package %{nil}
+
 %global __requires_exclude ^libQt6.*\.so.*$
 %global __provides_exclude ^libQt6.*\.so.*$
 
@@ -62,6 +65,14 @@ QtAdb Reforged 是同一作者对 QtAdb 的续作：一个 Qt 6 桌面工具，�
 
 %build
 cd "$([ -d %{srcdir_new} ] && echo %{srcdir_new} || echo %{srcdir_old})"
+
+# rpmbuild 会注入 Fedora 的加固/LTO 选项（-flto=auto、-D_FORTIFY_SOURCE=3、
+# -specs=…redhat-hardened-cc1、-Wl,-z,now 等）。那些是给发行版打包用的；
+# 对自包含的第三方包，实测它们会让程序**启动即崩**（无任何日志输出），
+# 因此这里清掉，只保留显式指定的优化级别。
+unset CFLAGS CXXFLAGS FFLAGS FCFLAGS LDFLAGS RUSTFLAGS VALAFLAGS
+export CFLAGS="-O2"
+export CXXFLAGS="-O2"
 "%{cmake_cmd}" -S QtAdb -B build -G Ninja \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_PREFIX_PATH=%{qt_prefix} \
@@ -124,7 +135,8 @@ install -D -m 0644 QtAdb/image/ico/logo.svg \
 # ⑥ /usr/bin 下的入口（相对符号链接；applicationDirPath() 会解析到包目录，
 #    因此内置 adb 与 Qt 插件都能被找到）
 mkdir -p "%{buildroot}%{_bindir}"
-ln -s %{appdir}/QtAdb "%{buildroot}%{_bindir}/QtAdb"
+ln -s "$(realpath --relative-to="%{buildroot}%{_bindir}" "%{buildroot}%{appdir}")/QtAdb" \
+      "%{buildroot}%{_bindir}/QtAdb"
 
 # ⑦ 许可证与文档：显式装到标准位置（不依赖各 RPM 版本间有差异的 %license 自动归位语义）
 licdir="%{buildroot}%{_datadir}/licenses/%{name}"
