@@ -15,6 +15,11 @@
 # 发布版不需要 debuginfo/debugsource 子包
 %global debug_package %{nil}
 
+# 不要把包内二进制交给 strip：内置的 adb 是 Google 的预编译产物，
+# 改动它既无必要（体积收益可忽略），也让"包内 adb 与官方发布逐字节一致"
+# 这条可验证性质失效。rpmbuild 的 strip 阶段因此整体关闭。
+%global __strip /bin/true
+
 %global __requires_exclude ^libQt6.*\.so.*$
 %global __provides_exclude ^libQt6.*\.so.*$
 
