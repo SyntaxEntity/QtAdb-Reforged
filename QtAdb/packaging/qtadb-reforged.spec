@@ -114,9 +114,9 @@ install -D -m 0644 %{SOURCE2} "%{buildroot}%{appdir}/Resources/platform-tools/NO
 install -D -m 0644 %{SOURCE3} "%{buildroot}%{appdir}/Resources/platform-tools/source.properties"
 
 # ⑤ 桌面集成
-install -D -m 0644 packaging/qtadb-reforged.desktop \
+install -D -m 0644 QtAdb/packaging/qtadb-reforged.desktop \
     "%{buildroot}%{_datadir}/applications/qtadb-reforged.desktop"
-install -D -m 0644 packaging/io.github.syntaxentity.QtAdbReforged.metainfo.xml \
+install -D -m 0644 QtAdb/packaging/io.github.syntaxentity.QtAdbReforged.metainfo.xml \
     "%{buildroot}%{_datadir}/metainfo/io.github.syntaxentity.QtAdbReforged.metainfo.xml"
 install -D -m 0644 QtAdb/image/ico/logo.svg \
     "%{buildroot}%{_datadir}/icons/hicolor/scalable/apps/qtadb-reforged.svg"
