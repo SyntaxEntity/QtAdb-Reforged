@@ -113,6 +113,8 @@ for p in platforms/libqwayland.so platforms/libqxcb.so \
     install -D -m 0755 "$plugin_src/$p" "%{buildroot}%{appdir}/plugins/$p"
 done
 cp -a "$plugin_src/wayland-shell-integration/." "%{buildroot}%{appdir}/plugins/wayland-shell-integration/"
+# Wayland 下的窗口装饰（客户端装饰）：不带它，GNOME 上就没有标题栏与关闭按钮。
+cp -a "$plugin_src/wayland-decoration-client/." "%{buildroot}%{appdir}/plugins/wayland-decoration-client/"
 
 # 每个二进制/插件都跑一遍 ldd，把其中的 Qt 库按 soname 复制进来
 targets="%{buildroot}%{appdir}/QtAdb"

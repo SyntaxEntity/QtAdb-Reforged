@@ -15,6 +15,17 @@ about::about(QWidget *parent) :
 
     applyDropShadow(ui->btn_github);
 
+    // 关于页只保留 GitHub 一个入口（指向本仓库）。其余入口（官网、酷安、QA、QQ 频道/群）
+    // 属于旧账号时期的分发渠道，先隐藏 —— 需要恢复时删掉这一段即可。
+    for(QPushButton *b : {ui->btn_website, ui->btn_links, ui->btn_coolapk,
+                          ui->btn_qq_dis, ui->btn_qgroup, ui->btn_money_2})
+    {
+        if(b != nullptr)
+        {
+            b->hide();
+        }
+    }
+
     // 这一项（打赏按钮）原实现里就是注释掉的，保持不启用
 
     applyDropShadow(ui->btn_money_2, QColorConstants::Svg::orange);
@@ -49,7 +60,7 @@ void about::on_btn_coolapk_clicked()
 
 void about::on_btn_github_clicked()
 {
-    QDesktopServices::openUrl(QUrl("https://github.com/LapplandSP", QUrl::TolerantMode));
+    QDesktopServices::openUrl(QUrl("https://github.com/SyntaxEntity/QtAdb-Reforged", QUrl::TolerantMode));
 }
 
 void about::on_btn_money_2_clicked()

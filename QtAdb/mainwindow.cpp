@@ -523,16 +523,20 @@ void MainWindow::addIndexItems()                    //方法：初始化向index
     ui->indexList->setResizeMode(QListView::Adjust);
 }
 
-void MainWindow::lock()                             //方法：锁定mainwindow中控件
+void MainWindow::lock()                             //方法：标记"暂无设备"（不再禁用控件）
 {
-    ui->indexList->setEnabled(false);
-    ui->page->setEnabled(false);
+    // 原来这里是 indexList/page 的 setEnabled(false)。后果是：只要设备列表为空，
+    // 整个界面就永久锁死 —— 连不需要设备的"关于"页都进不去，而且没有任何提示。
+    // 现在改为【只提示、不禁用】：
+    //   * 页面本身已能优雅处理"无设备"（setCurrentDevice 里有 #EMPTY# 兜底）；
+    //   * 设备到位后 setCurrentDevice() 会用别名/型号覆盖这行提示。
+    // 顶部本就显示 .ui 里的默认提示（"请先选择设备"，且已有英文翻译），
+    // 因此这里什么都不用做 —— 设备到位后 setCurrentDevice() 会用别名/型号覆盖它。
 }
 
-void MainWindow::unlock()                           //方法：解锁mainwindow中的控件
+void MainWindow::unlock()                           //方法：清除"暂无设备"提示（与 lock 对称）
 {
-    ui->indexList->setEnabled(true);
-    ui->page->setEnabled(true);
+    // 不再改动任何控件的 enabled 状态 —— 提示文本由 setCurrentDevice() 负责替换。
 }
 
 void MainWindow::setStyles()                        //方法：设置样式
