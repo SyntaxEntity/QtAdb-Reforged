@@ -4,9 +4,10 @@
 
 QtAdb 是一个基于 [Qt](https://www.qt.io/) 的 Android 工具集合：内置 adb 环境，把常用 adb 操作做成图形化界面。
 
-> **本仓库是 [LapplandSp/QtAdb](https://github.com/LapplandSP/QtAdb) 的重构分支。**
-> 在上游代码之上做了 91 轮 AI 辅助重构，目标是让代码"健壮 / 可维护 / 可拓展 / 易读"，
-> **不新增功能**。可执行文件仍叫 `QtAdb`，配置目录（`~/.config/QtAdb/`）与上游保持兼容。
+> **本仓库是 [LapplandSp/QtAdb](https://github.com/LapplandSP/QtAdb) 的续作**，同一个作者：
+> 旧账号 `@LapplandSP` 已无法登录，现由 `@SyntaxEntity` 继续维护。
+> 在原有代码之上做了 91 轮 AI 辅助重构，目标是让代码"健壮 / 可维护 / 可拓展 / 易读"，
+> **不新增功能**。可执行文件仍叫 `QtAdb`，配置目录（`~/.config/QtAdb/`）保持不变。
 
 <p align="center">
   <em>同一个工具，重做了一遍代码。</em>
@@ -14,19 +15,23 @@ QtAdb 是一个基于 [Qt](https://www.qt.io/) 的 Android 工具集合：内置
 
 ---
 
-## 📌 与上游的关系
+## 📌 项目沿革（同一作者的续作）
 
 | 项目 | 说明 |
 | --- | --- |
-| 上游仓库 | [LapplandSp/QtAdb](https://github.com/LapplandSP/QtAdb)（版本 1.7） |
-| 上游官网 | https://lapplandsp.github.io/QtAdb-Pages/ |
-| 许可 | MIT，原始版权归 `Copyright (c) 2023 Github@LapplandSP`（见 [LICENSE](LICENSE)） |
-| 本分支定位 | **只做重构与缺陷修复**，功能范围与上游一致 |
-| 提问去处 | 本分支的问题请提到**本仓库的 issue**；上游的社群与邮箱属于上游项目本身 |
+| 旧仓库 | [LapplandSp/QtAdb](https://github.com/LapplandSP/QtAdb)（版本 1.7） |
+| 旧官网 | https://lapplandsp.github.io/QtAdb-Pages/ |
+| 作者 | 两个仓库是**同一个作者**：旧账号 `@LapplandSP` → 现账号 `@SyntaxEntity` |
+| 本仓库定位 | **正统续作**：功能范围与 1.7 一致（不新增功能），另外做了大量重构与缺陷修复 |
+| 为什么迁移 | 旧账号已无法登录，原仓库无法继续更新 |
+| 许可 | MIT，保留原始版权声明 `Copyright (c) 2023 Github@LapplandSP`（见 [LICENSE](LICENSE)） |
+| 提问去处 | 请在本仓库提 issue —— 旧仓库已无法再接收改动 |
 
-为什么仓库名多了 `-Reforged`：`QtAdb` 这个名字此前已有多个项目使用，加后缀既保留连续性与血缘，也让检索时能区分本分支。
+> ⚠️ 因为旧账号登不上，**旧仓库自己没法挂上"已迁移"的说明**，所以这段沿革只能写在这里。
+> 如果你是从旧仓库找过来的：以本仓库为准，界面与使用方式与 1.7 一致。
 
----
+仓库名为什么加 `-Reforged`：`QtAdb` 这个名字此前已被多个**无关**项目使用（旧仓库的 FAQ 里也提到过），
+加后缀既保留连续性，也让检索时能一眼分清"正统续作"与同名项目。
 
 ## 🔍 这个分支改了什么（都能复现）
 
@@ -132,14 +137,15 @@ QtAdb 是一个基于 [Qt](https://www.qt.io/) 的 Android 工具集合：内置
   A：没有。AI 用在**重构代码这个过程**里（91 轮、带可复现的验证矩阵），产品本身没有对话、
   自动化之类的 AI 功能——这也是仓库名用 `-Reforged`（强调"重做"）而不是 `-AI` 的原因。
 
+- **Q：这和 `LapplandSp/QtAdb` 是什么关系？**
+
+  A：**同一个作者的续作**。旧账号 `@LapplandSP` 已无法登录，因此迁移到 `@SyntaxEntity`
+  继续维护，仓库名加上 `-Reforged` 以免与同名项目混淆。功能范围与 1.7 一致，
+  此外做了大量重构与缺陷修复（见上文与 [`docs/AI-REFACTOR-AUDIT.md`](docs/AI-REFACTOR-AUDIT.md)）。
+
 - **Q：为什么还叫 QtAdb？**
 
-  A：保持连续性与血缘。可执行文件仍为 `QtAdb`，因此 `~/.config/QtAdb/` 下的设备别名等数据不受影响。
-
-- **Q：还有其它名为 QtAdb 的项目/软件，此项目与它们是什么关系？**
-
-  A：上游作者在文档里已经说明过重名问题。本分支是 `LapplandSp/QtAdb` 的重构版本，
-  并以 `QtAdb-Reforged` 作为仓库名以示区分；其它同名项目与本分支没有关系。
+  A：保持连续性。可执行文件仍为 `QtAdb`，因此 `~/.config/QtAdb/` 下的设备别名等数据不受影响。
 
 - **Q：不是有环境吗？怎么还是跑不了🥺**
 
@@ -261,9 +267,8 @@ cmake --build build -j
 
 ## 🙋 反馈
 
-- **本分支**：请在本仓库提交 issue（功能建议、缺陷、重构意见都欢迎）。
+- 请在本仓库提交 issue（功能建议、缺陷、重构意见都欢迎）。
   若您有想要添加的可激活应用，请附上它的命令与文档/官网。
-- **上游项目**：见 [LapplandSp/QtAdb](https://github.com/LapplandSP/QtAdb)。
-  上游作者的 QQ 群 / Telegram / 邮箱属于上游项目本身，本分支的问题请勿投到那里。
+- 旧仓库与其社群渠道属于**同一位作者**；由于旧账号无法登录，那里的内容不会再更新，请以本仓库为准。
 
 十分感谢你的建议！
