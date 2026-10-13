@@ -10,7 +10,7 @@
 set -euo pipefail
 
 here="$(cd "$(dirname "$0")" && pwd)"
-root="$(cd "$here/.." && pwd)"          # 仓库根
+root="$(cd "$here/../.." && pwd)"       # 仓库根（packaging/ 在 QtAdb/ 下）
 topdir="${1:-$root/packaging/rpmbuild}"
 
 # 本机的 cmake 与 Qt 都在私有前缀里，且 cmake 需要 LD_LIBRARY_PATH 才能运行
@@ -38,6 +38,10 @@ mkdir -p "$topdir"/{SOURCES,SPECS,BUILD,BUILDROOT,RPMS,SRPMS}
 ver="$(sed -n 's/^Version:[[:space:]]*//p' "$here/qtadb-reforged.spec" | head -1)"
 git -C "$root" archive --prefix="QtAdb-Reforged-$ver/" -o "$topdir/SOURCES/qtadb-reforged-$ver.tar.gz" HEAD
 cp "$here/qtadb-reforged.spec" "$topdir/SPECS/"
+# platform-tools 被 .gitignore 忽略（不进源码包），按 RPM 惯例作为独立 Source 提供
+install -m 0755 "$here/platform-tools-linux/adb"              "$topdir/SOURCES/adb"
+install -m 0644 "$here/platform-tools-linux/NOTICE.txt"       "$topdir/SOURCES/NOTICE.txt"
+install -m 0644 "$here/platform-tools-linux/source.properties" "$topdir/SOURCES/source.properties"
 
 # ③ 打包
 rpmbuild -bb "$topdir/SPECS/qtadb-reforged.spec" \

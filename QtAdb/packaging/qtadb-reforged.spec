@@ -24,6 +24,11 @@ Summary(zh_CN): adb（Android 调试桥）的图形前端
 License:        MIT AND LGPL-3.0-or-later AND Apache-2.0
 URL:            https://github.com/SyntaxEntity/QtAdb-Reforged
 Source0:        %{name}-%{version}.tar.gz
+# 官方 Linux platform-tools 的三个文件由 packaging/fetch-linux-platform-tools.sh 下载
+# 并校验 SHA-256 后放进 SOURCES/（二进制不入库，避免每次 clone 都付代价）
+Source1:        adb
+Source2:        NOTICE.txt
+Source3:        source.properties
 
 # cmake/ninja/gcc 由构建脚本确保在 PATH 上；这里不声明 qt6-qtbase-devel，
 # 因为默认走私有 Qt 前缀（若改用系统 Qt 构建，请自行加上该 BuildRequires）。
@@ -50,16 +55,24 @@ QtAdb Reforged 是同一作者对 QtAdb 的续作：一个 Qt 6 桌面工具，�
 # 若在装有 cmake 的系统上构建，可直接用系统的 cmake。
 %global cmake_cmd %{?_cmake_cmd}%{!?_cmake_cmd:cmake}
 
+# RPM 6 起，%build/%install 的工作目录与源码目录是分开的（构建目录多一层 "-build"），
+# 所以这里显式定位源码树，两种布局都兼容。
+%global srcdir_new %{_builddir}/%{name}-%{version}-build/QtAdb-Reforged-%{version}
+%global srcdir_old %{_builddir}/QtAdb-Reforged-%{version}
+
 %build
+cd "$([ -d %{srcdir_new} ] && echo %{srcdir_new} || echo %{srcdir_old})"
 "%{cmake_cmd}" -S QtAdb -B build -G Ninja \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_PREFIX_PATH=%{qt_prefix} \
     -DCMAKE_INSTALL_PREFIX=%{appdir} \
-    -DCMAKE_INSTALL_RPATH=$ORIGIN/lib \
+    -DCMAKE_INSTALL_RPATH=\$ORIGIN/lib \
     -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON
 "%{cmake_cmd}" --build build
 
 %install
+cd "$([ -d %{srcdir_new} ] && echo %{srcdir_new} || echo %{srcdir_old})"
+
 # ① 应用本体（CMake 的安装规则把它放到 %{appdir}/bin/QtAdb，这里挪到包根，
 #    使 applicationDirPath() 正好等于 %{appdir} —— 应用据此找 Resources/ 与 lib/）
 DESTDIR=%{buildroot} "%{cmake_cmd}" --install build
@@ -96,14 +109,9 @@ for t in $targets; do
 done
 
 # ④ 内置官方 Linux adb（应用会优先使用 可执行文件目录/Resources/platform-tools/adb）
-ptdir=packaging/platform-tools-linux
-if [ ! -x "$ptdir/adb" ]; then
-    echo "✗ 缺少 $ptdir/adb —— 请先运行 packaging/fetch-linux-platform-tools.sh" >&2
-    exit 1
-fi
-install -D -m 0755 "$ptdir/adb"              "%{buildroot}%{appdir}/Resources/platform-tools/adb"
-install -D -m 0644 "$ptdir/NOTICE.txt"       "%{buildroot}%{appdir}/Resources/platform-tools/NOTICE.txt"
-install -D -m 0644 "$ptdir/source.properties" "%{buildroot}%{appdir}/Resources/platform-tools/source.properties"
+install -D -m 0755 %{SOURCE1} "%{buildroot}%{appdir}/Resources/platform-tools/adb"
+install -D -m 0644 %{SOURCE2} "%{buildroot}%{appdir}/Resources/platform-tools/NOTICE.txt"
+install -D -m 0644 %{SOURCE3} "%{buildroot}%{appdir}/Resources/platform-tools/source.properties"
 
 # ⑤ 桌面集成
 install -D -m 0644 packaging/qtadb-reforged.desktop \
@@ -119,12 +127,12 @@ mkdir -p "%{buildroot}%{_bindir}"
 ln -s %{appdir}/QtAdb "%{buildroot}%{_bindir}/QtAdb"
 
 # ⑦ 许可证与文档：交给 %license / %doc 处理（见 %files
-%license LICENSE
-%license packaging/licenses/LGPL-3.0-only.txt
-%license packaging/licenses/GPL-3.0-only.txt
-%license packaging/platform-tools-linux/NOTICE.txt
-%doc README.md
-%doc docs/AI-REFACTOR-AUDIT.md
+%license %{_datadir}/licenses/%{name}/LICENSE
+%license %{_datadir}/licenses/%{name}/LICENSE.LGPL-3.0
+%license %{_datadir}/licenses/%{name}/LICENSE.GPL-3.0
+%license %{_datadir}/licenses/%{name}/NOTICE-platform-tools.txt
+%doc %{_datadir}/doc/%{name}/README.md
+%doc %{_datadir}/doc/%{name}/AI-REFACTOR-AUDIT.md
 %{_bindir}/QtAdb
 %{appdir}/QtAdb
 %{appdir}/qt.conf
