@@ -52,3 +52,6 @@ core.*
 # 打包：下载的 platform-tools 与本地 rpmbuild 树不入库
 QtAdb/packaging/platform-tools-linux/
 QtAdb/packaging/rpmbuild/
+
+# 打包中间产物：无论放在仓库根还是 QtAdb/ 下都不入库
+packaging/rpmbuild/
