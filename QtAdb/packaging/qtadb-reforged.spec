@@ -186,7 +186,7 @@ install -D -m 0644 docs/AI-REFACTOR-AUDIT.md             "$docdir/AI-REFACTOR-AU
 %{_datadir}/icons/hicolor/scalable/apps/qtadb-reforged.svg
 
 %changelog
-* Mon Oct 13 2025 SyntaxEntity <SyntaxEntity@users.noreply.github.com> - 2.0.0-1
+* Mon Oct 13 2025 SyntaxEntity <265272538+SyntaxEntity@users.noreply.github.com> - 2.0.0-1
 - 首个 Linux 打包版本：自包含 Qt 6 运行库 + Google 官方 Linux 版 adb。
 - 代码为 91 轮 AI 辅助重构后的结果（不新增功能）：异步化、平台解耦、i18n、
   缺陷修复 20 余项；详见包内 AI-REFACTOR-AUDIT.md。
