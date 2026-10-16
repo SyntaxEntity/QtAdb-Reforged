@@ -214,6 +214,25 @@ QtAdb 是一个基于 [Qt](https://www.qt.io/) 的 Android 工具集合：内置
 
 ---
 
+## 目录结构
+
+```
+QtAdb-Reforged/                    仓库根：与"项目"有关的东西
+├── README.md
+├── LICENSE                        MIT（原始版权归 Github@LapplandSP）
+├── privacy.md
+├── docs/AI-REFACTOR-AUDIT.md      本次重构的逐轮记录
+└── QtAdb/                         应用本体：与"构成程序"有关的东西
+    ├── CMakeLists.txt             CMake 构建描述
+    ├── QtAdb.pro                  qmake 构建描述（与上面那份必须同步）
+    ├── packaging/                 Linux RPM 打包材料
+    ├── translations/              英文翻译（.ts）
+    └── Resources/                 随程序分发的 platform-tools（Windows 版）
+```
+
+一条规则：**仓库根放"关于项目"的，`QtAdb/` 放"构成程序"的**。
+所以构建时源码目录是 `QtAdb/`（`cmake -S QtAdb -B build`），打包材料在 `QtAdb/packaging/` 下。
+
 ## 构建
 
 工程同时提供 **CMake** 与 **qmake** 两套等价的构建描述（`QtAdb/CMakeLists.txt` 与 `QtAdb/QtAdb.pro`）。
