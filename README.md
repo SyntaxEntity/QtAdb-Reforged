@@ -1,9 +1,9 @@
 # QtAdb-Reforged
 
-[![Qt 6.11.2](https://img.shields.io/badge/Qt-6.11.2-41CD52?logo=qt&logoColor=white&style=for-the-badge)](https://www.qt.io/)
-[![C++17](https://img.shields.io/badge/C%2B%2B-17-00599C?logo=cplusplus&logoColor=white&style=for-the-badge)](https://isocpp.org/)
-[![License MIT](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)](LICENSE)
-[![Platform](https://img.shields.io/badge/Platform-Fedora%2044%20%7C%20Wayland-294172?logo=fedora&logoColor=white&style=for-the-badge)](#已知限制)
+![C++](https://img.shields.io/badge/C%2B%2B-17-blue?style=for-the-badge&logo=cplusplus)
+![Qt](https://img.shields.io/badge/Qt-6.11.2-blue?style=for-the-badge&logo=qt)
+![Platform](https://img.shields.io/badge/Platform-Fedora%2044%20%7C%20Wayland-blue?style=for-the-badge&logo=fedora)
+![license](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)
 
 adb 的 Qt 6 图形前端：把常用 adb 操作做成界面，并内置 adb 查找，面向不想背命令行的 Android 用户与开发者。
 本仓库是同一作者旧仓库 [LapplandSp/QtAdb](https://github.com/LapplandSP/QtAdb) 的续作（旧账号 `@LapplandSP` → 现账号 `@SyntaxEntity`）。
