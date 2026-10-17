@@ -11,9 +11,9 @@
 
 # QtAdb 代码审计与优化/重写方案
 
-> 审计对象：`~/Projects/qtadb/QtAdb-Reforged`（[LapplandSP/QtAdb](https://github.com/LapplandSP/QtAdb)，commit `191205b`）
+> 审计对象：`~/Projects/QtAdb/QtAdb-Reforged`（[LapplandSP/QtAdb](https://github.com/LapplandSP/QtAdb)，commit `191205b`）
 > 审计方式：**只读**。全部 44 个编译单元逐文件精读 + 真实编译器取证。
-> **本次未改动仓库任何文件**（`git status` 变更数 = 0）；所有构建产物在仓库外的 `Projects/qtadb/.dsh/`。
+> **本次未改动仓库任何文件**（`git status` 变更数 = 0）；所有构建产物在仓库外的 `Projects/QtAdb/.dsh/`。
 
 ---
 
@@ -28,10 +28,10 @@
 
 | 项 | 值 |
 |---|---|
-| 仓库 | `~/Projects/qtadb/QtAdb-Reforged`（源码在 `QtAdb/` 子目录，git 仓库根在其上一层） |
+| 仓库 | `~/Projects/QtAdb/QtAdb-Reforged`（源码在 `QtAdb/` 子目录，git 仓库根在其上一层） |
 | 构建 | CMake（`QtAdb/CMakeLists.txt`）与 qmake（`QtAdb/QtAdb.pro`）**双份维护**；Linux + Qt 6.11 可构建 |
 | 改动规模 | 见文末"累计"；**全部未提交**，`git status` 可见，`git diff HEAD` 可整体回退 |
-| 工具链 | Qt 6.11.2 解包在 `$HOME/.local/qt6-prefix/usr`（无 root）；验证产物在仓库外 `Projects/qtadb/.dsh/` |
+| 工具链 | Qt 6.11.2 解包在 `$HOME/.local/qt6-prefix/usr`（无 root）；验证产物在仓库外 `Projects/QtAdb/.dsh/` |
 
 ### 0.3 已完成（按主题，细节见对应章节）
 
@@ -302,7 +302,7 @@
 ```bash
 U=$HOME/.local/qt6-prefix/usr                     # Qt 解包前缀
 export PATH=$U/bin:$U/lib64/qt6/bin:$PATH LD_LIBRARY_PATH=$U/lib64 LC_ALL=C
-WS=~/Projects/qtadb
+WS=~/Projects/QtAdb
 
 # 全新构建（app）
 cmake -S $WS/QtAdb/QtAdb -B $WS/.dsh/build-cmake -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=$U
