@@ -1,70 +1,18 @@
-<div align=center><img src="QtAdb/image/ico/logo.svg" width="120" alt="QtAdb-Reforged"></div>
-
 # QtAdb-Reforged
 
-QtAdb 是一个基于 [Qt](https://www.qt.io/) 的 Android 工具集合：内置 adb 环境，把常用 adb 操作做成图形化界面。
+[![Qt 6.11.2](https://img.shields.io/badge/Qt-6.11.2-41CD52?logo=qt&logoColor=white&style=for-the-badge)](https://www.qt.io/)
+[![C++17](https://img.shields.io/badge/C%2B%2B-17-00599C?logo=cplusplus&logoColor=white&style=for-the-badge)](https://isocpp.org/)
+[![License MIT](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)](LICENSE)
+[![Platform](https://img.shields.io/badge/Platform-Fedora%2044%20%7C%20Wayland-294172?logo=fedora&logoColor=white&style=for-the-badge)](#已知限制)
 
-> **本仓库是 [LapplandSp/QtAdb](https://github.com/LapplandSP/QtAdb) 的续作**，同一个作者：
-> 旧账号 `@LapplandSP` 已无法登录，现由 `@SyntaxEntity` 继续维护。
-> 在原有代码之上做了 91 轮 AI 辅助重构，目标是让代码"健壮 / 可维护 / 可拓展 / 易读"，
-> **不新增功能**。可执行文件仍叫 `QtAdb`，配置目录（`~/.config/QtAdb/`）保持不变。
+adb 的 Qt 6 图形前端：把常用 adb 操作做成界面，并内置 adb 查找，面向不想背命令行的 Android 用户与开发者。
+本仓库是同一作者旧仓库 [LapplandSp/QtAdb](https://github.com/LapplandSP/QtAdb) 的续作（旧账号 `@LapplandSP` → 现账号 `@SyntaxEntity`）。
 
-<p align="center">
-  <em>同一个工具，重做了一遍代码。</em>
-</p>
+> 版本 `2.0.0` ｜ 状态：开发中 ｜ 已知限制见 [已知限制](#已知限制)
 
----
+## 功能
 
-## 📌 项目沿革（同一作者的续作）
-
-| 项目 | 说明 |
-| --- | --- |
-| 旧仓库 | [LapplandSp/QtAdb](https://github.com/LapplandSP/QtAdb)（版本 1.7） |
-| 旧官网 | https://lapplandsp.github.io/QtAdb-Pages/ |
-| 作者 | 两个仓库是**同一个作者**：旧账号 `@LapplandSP` → 现账号 `@SyntaxEntity` |
-| 本仓库定位 | **正统续作**：功能范围与 1.7 一致（不新增功能），另外做了大量重构与缺陷修复 |
-| 为什么迁移 | 旧账号已无法登录，原仓库无法继续更新 |
-| 许可 | MIT，保留原始版权声明 `Copyright (c) 2023 Github@LapplandSP`（见 [LICENSE](LICENSE)） |
-| 提问去处 | 请在本仓库提 issue —— 旧仓库已无法再接收改动 |
-
-> ⚠️ 因为旧账号登不上，**旧仓库自己没法挂上"已迁移"的说明**，所以这段沿革只能写在这里。
-> 如果你是从旧仓库找过来的：以本仓库为准，界面与使用方式与 1.7 一致。
-
-仓库名为什么加 `-Reforged`：`QtAdb` 这个名字此前已被多个**无关**项目使用（旧仓库的 FAQ 里也提到过），
-加后缀既保留连续性，也让检索时能一眼分清"正统续作"与同名项目。
-
-## 🔍 这个分支改了什么（都能复现）
-
-| 指标 | 上游 1.7 | 现在 |
-| --- | ---: | ---: |
-| `qDebug()` 调试输出 | 278 | **0** |
-| 注释掉的代码 | 474 | **0** |
-| 只声明不引用的函数 / 只写不读的成员 | — | **0 / 0** |
-| 直接 `new` | 253 | **130** |
-| 可翻译文案（`tr()` 调用） | 0 | **213** |
-| 最大源文件 | `mainwindow.cpp` 911 行 | **714 行** |
-| 函数规模 | — | 342 个函数，中位数 **5 行**；超过 60 行的只有 1 个（数据表） |
-
-具体做了什么：
-
-- **异步化**：删除同步的 `adbProcess`（21 处会让界面卡住的调用），改为单队列 + 超时 + 取消 + 退出收口的 `AdbClient`；设备挂起时界面不再无响应。
-- **平台解耦**：移除 22 个编译单元里无条件包含的 `Windows.h`；Linux 上以定时器轮询兜底热插拔通知，走与 Windows 原生通知**相同**的下游路径。
-- **国际化**：界面文案全部包 `tr()`，新增英文翻译（`translations/QtAdb_en.ts`，436 词条 / 已译 345），构建时嵌入 `:/i18n/`。
-- **修复缺陷 20 余项**：畸形 adb 输出越界解析、`QList` 越界断言并 abort、阴影句柄变空指针、输入框验证器无父对象泄漏、页面/对话框/通知控件泄漏、表格模型累积、动画缺父对象、堆上的 `QMetaObject::Connection`、退出时在途请求、子页监视命令缺 `-s`、设备别名被覆盖、`QSettings` 写入失败不可见、未登记的解释键静默失效……
-- **结构**：页面工厂与列表条目改为数据表（**新增子页 = 加一行**）、重复样板收成具名助手、重复样式串集中到 `uistyles.h`、无线调试与 Magisk 窗口拆成独立文件。
-
-**怎么验证这些说法**：仓库之外的验证设施提供 **32 项回归矩阵**——完整应用场景下 LSan 报
-**0 字节 / 0 次分配**，UBSan 下 **0 处未定义行为**，另有 8 个运行场景、6 个探针、9 项静态检查。
-逐轮的决策过程、以及**"为什么不做某些事"**，记录在 [`docs/AI-REFACTOR-AUDIT.md`](docs/AI-REFACTOR-AUDIT.md)。
-
-> ⚠️ **诚实边界**：运行验证是在 **Linux** 上完成的。Windows 侧只验证了"两份构建描述等价、
-> 代码不再依赖 Windows 专有头文件"，**没有在 Windows 上实际构建与运行**。
-> qmake 侧只做了与 CMake 的列表一致性校验，未实际构建。英文翻译的词条完整性经过检查，
-> 但"特定系统语言下运行时是否加载到对应 `.qm`"未做端到端验证。
-
----
-
-## 🔩特性
+QtAdb 把 adb 的常见操作图形化，主要能力：
 
 - 已**内置 adb 环境**，并可在运行时自行配置，使用者无需关心环境变量。
 - 支持 Windows 11 中的 Android 子系统（**WSA**）。*仅可在 WSA 运行时连接 WSA。*
@@ -72,25 +20,19 @@ QtAdb 是一个基于 [Qt](https://www.qt.io/) 的 Android 工具集合：内置
 - 提供命令模板，使用者可直接复制命令并自行执行。
 - 支持多种状态显示及使用：开机、Recovery 及 adb sideload。
 
-*注意：暂不支持比 Windows 10 更早的 Windows 系统。*
-
----
-
-## 🛠️功能
-
-### ℹ️ 设备信息
+### 设备信息
 
 - 获取设备型号、屏幕分辨率、屏幕密度（DPI）、Android Id、安卓版本以及处理器型号
 - 修改 DPI、修改屏幕分辨率
 - 实时监控 CPU 使用率、内存使用率
 
-### ✔️ 激活
+### 激活
 
 - 提供主流工具应用的激活：[黑阈](https://brevent.jianyv.com/)、[冰箱](https://iceboxdoc.catchingnow.com/)、[小黑屋](https://stopapp.https.gs/)、[Shizuku](https://shizuku.rikka.app/zh-hans/)、*黑洞*、[太极](https://taichi.cool/)、[Island](https://island.oasisfeng.com/)、Scene、[看帧数+](https://www.coolapk.com/apk/com.watchfps)、[权限狗](https://www.coolapk.com/apk/com.web1n.permissiondog)、[雹](https://github.com/aistra0528/Hail)、[安装狮](https://www.coolapk.com/apk/com.modosa.apkinstaller)、[Dhizuku](https://github.com/iamr0s/Dhizuku)
 - 为应用授予其所需的权限：BatteryGuru（使用情况访问、修改安全系统设置、读取 DUMP）
 - 更多应用正在添加中
 
-### 🎮 设备控制
+### 设备控制
 
 - 电源控制：关机、重启到系统、重启到 Recovery、重启到 Fastboot
 - 按键模拟：
@@ -101,7 +43,7 @@ QtAdb 是一个基于 [Qt](https://www.qt.io/) 的 Android 工具集合：内置
   - 拉起系统应用：设置、通讯录、拨号、浏览器、音乐、日历、计算器
 - 命令行：运行自定义的 adb 命令；在 adb 环境中打开命令行窗口
 
-### 📦 软件包管理器
+### 软件包管理器
 
 - 安装应用
 - 列出已知的权限
@@ -113,14 +55,14 @@ QtAdb 是一个基于 [Qt](https://www.qt.io/) 的 Android 工具集合：内置
 - 列出当前设备支持的所有库
 - 用户：列出当前设备中的所有用户；删除选中用户
 
-### 🔧 Recovery 功能
+### Recovery 功能
 
 - 侧载
   - 当设备处于 adb sideload 模式时，可使用侧载刷入 zip 刷机包
   - **这是危险功能，即使正确地使用也可能导致设备故障，请确保您有足够的排障能力后使用**
   - **使用侧载功能时请不要关闭程序**
 
-### 🔮 其它功能
+### 其它功能
 
 - 账户：查看设备中各个用户已登录的账户
 - 去除叹号：修改验证服务器，提供多个预设选项（MIUI、EMUI 等国内验证服务器）
@@ -128,9 +70,29 @@ QtAdb 是一个基于 [Qt](https://www.qt.io/) 的 Android 工具集合：内置
 - 状态栏与导航栏：隐藏状态栏图标（静音/震动、定位、麦克风、录屏、WIFI、热点、飞行模式、耳机、闹钟、蓝牙、NFC）、重置状态栏图标、全局隐藏状态栏与导航栏
 - 修改系统震感强度
 
----
+## 安装
 
-## 💕Q&A
+**Linux（RPM，需自行构建）**：本仓库目前**没有公开的预编译包**，需要从源码构建并打成本地 RPM：
+
+```bash
+cd QtAdb
+packaging/build-rpm.sh
+sudo dnf install packaging/rpmbuild/RPMS/x86_64/qtadb-reforged-2.0.0-1.fc44.x86_64.rpm
+```
+
+打出的包是**自包含**的：内含 Qt 6 运行库与 Google 官方 Linux 版 adb，因此不需要另装 `qt6-qtbase` 或 `android-tools`。细节与边界见 [QtAdb/packaging/README.md](QtAdb/packaging/README.md)。
+
+**Windows**：本仓库尚未提供 Windows 构建，请使用上游 1.7 的发布包。
+
+**依赖**：程序优先使用可执行文件同目录下的 `Resources/platform-tools/adb`；找不到时回退到 `PATH` 上的 `adb`。系统里没有 adb 且未随程序分发时，所有 adb 功能都会失败。
+
+## 使用
+
+1. 打开设备的 USB 调试，并在手机上允许本机调试授权；
+2. 启动后左侧为功能页，顶部显示当前设备；
+3. 未检测到设备时界面仍可浏览，各页会显示 adb 的原始输出或报错。
+
+### 常见问题
 
 - **Q：这个分支加了 AI 功能吗？**
 
@@ -200,40 +162,15 @@ QtAdb 是一个基于 [Qt](https://www.qt.io/) 的 Android 工具集合：内置
 
   A：当然可以催更，它现在仍处于开发中，并没有正式发布，仍需要长时间的调试。
 
-### 🍘 项目计划（上游）
+## 配置
 
-> Q：为什么刷机相关命令这么少？为什么没有修改系统文件衍生的玩法？
->
-> A：危险性较高，防小白。不过也不是不能加。
+| 项 | 位置 / 行为 |
+| --- | --- |
+| 设备别名 | `~/.config/QtAdb/device-names.ini`（按设备地址保存，界面优先显示别名） |
+| adb 查找顺序 | 可执行文件同目录 `Resources/platform-tools/adb` → 否则回退到 `PATH` 上的 `adb` |
+| 界面文案语言 | 跟随系统语言；英文翻译尚未覆盖全部词条（见 [已知限制](#已知限制)） |
 
-- 跨平台
-- 文件管理
-- 集成 scrcpy
-- 命令：更改屏幕边距
-- 控制台：优化 err 处理
-
----
-
-## 目录结构
-
-```
-QtAdb-Reforged/                    仓库根：与"项目"有关的东西
-├── README.md
-├── LICENSE                        MIT（原始版权归 Github@LapplandSP）
-├── privacy.md
-├── docs/AI-REFACTOR-AUDIT.md      本次重构的逐轮记录
-└── QtAdb/                         应用本体：与"构成程序"有关的东西
-    ├── CMakeLists.txt             CMake 构建描述
-    ├── QtAdb.pro                  qmake 构建描述（与上面那份必须同步）
-    ├── packaging/                 Linux RPM 打包材料
-    ├── translations/              英文翻译（.ts）
-    └── Resources/                 随程序分发的 platform-tools（Windows 版）
-```
-
-一条规则：**仓库根放"关于项目"的，`QtAdb/` 放"构成程序"的**。
-所以构建时源码目录是 `QtAdb/`（`cmake -S QtAdb -B build`），打包材料在 `QtAdb/packaging/` 下。
-
-## 构建
+## 构建（开发）
 
 工程同时提供 **CMake** 与 **qmake** 两套等价的构建描述（`QtAdb/CMakeLists.txt` 与 `QtAdb/QtAdb.pro`）。
 **两份描述里的源文件列表与翻译文件列表必须保持一致**——新增或删除文件时两边都要改。
@@ -249,45 +186,100 @@ cmake --build build -j
 ```
 
 - 仅依赖 `Qt6::Widgets`；**嵌入**资源（`.qrc` 列出的 128 个文件）合计约 **2.7 MiB**，已使用 `qt_add_big_resources` 处理。
-- `QtAdb/Resources`（约 14 MB，含 `platform-tools`）**不会被嵌入**，而是在 Windows 构建时复制到可执行文件目录，
-  与 `MainWindow::initEnvironmentPATH()` 的查找约定一致。
+- `QtAdb/Resources`（约 14 MB，含 `platform-tools`）**不会被嵌入**，而是在 Windows 构建时复制到可执行文件目录，与 `MainWindow::initEnvironmentPATH()` 的查找约定一致。
 - 英文翻译由 `lrelease` 编译为 `QtAdb_en.qm` 并嵌入到 `:/i18n/`（找不到 `lrelease` 时该步骤会被跳过，程序仍可构建）。
 
 ### qmake（原有方式）
 
 - 建议使用 Qt 6.2.4，Kit 选择 MinGW。
-- 运行环境会在 `MainWindow` 构造时被更改至 `./Resources/platform-tools`，
-  请确保 debug 或 release 时 `Resources` 目录位置正确。
-- 翻译：`QtAdb.pro` 里的 `TRANSLATIONS`、`CONFIG += lrelease`、`CONFIG += embed_translations` 与 CMake 侧的
-  `QTADB_TS_FILES` 指向**同一个** `.ts` 文件。
+- 运行环境会在 `MainWindow` 构造时被更改至 `./Resources/platform-tools`，请确保 debug 或 release 时 `Resources` 目录位置正确。
+- 翻译：`QtAdb.pro` 里的 `TRANSLATIONS`、`CONFIG += lrelease`、`CONFIG += embed_translations` 与 CMake 侧的 `QTADB_TS_FILES` 指向**同一个** `.ts` 文件。
 
-> 说明：两套构建描述都已固定为 **C++17**（`QtAdb.pro` 的 `CONFIG += c++17` 与
-> `CMakeLists.txt` 的 `CMAKE_CXX_STANDARD 17`），无需再手工改动。
+> 说明：两套构建描述都已固定为 **C++17**（`QtAdb.pro` 的 `CONFIG += c++17` 与 `CMakeLists.txt` 的 `CMAKE_CXX_STANDARD 17`），无需再手工改动。
 
----
+回归验证设施**不随仓库发布**（见 [已知限制](#已知限制)），因此这里不提供可复制的测试命令。
 
-## 🧬 资源与致谢
+## 项目结构
 
-### 图标
+```
+QtAdb-Reforged/                    仓库根：与"项目"有关的东西
+├── README.md
+├── LICENSE                        MIT（原始版权归 Github@LapplandSP）
+├── privacy.md
+├── AGENTS.md                      维护者与 agent 的上手契约
+├── docs/AI-REFACTOR-AUDIT.md      本次重构的逐轮记录
+└── QtAdb/                         应用本体：与"构成程序"有关的东西
+    ├── CMakeLists.txt             CMake 构建描述
+    ├── QtAdb.pro                  qmake 构建描述（与上面那份必须同步）
+    ├── packaging/                 Linux RPM 打包材料
+    ├── translations/              英文翻译（.ts）
+    └── Resources/                 随程序分发的 platform-tools（Windows 版）
+```
 
-- 主要：[RemixIcon](https://github.com/Remix-Design/RemixIcon)
-- 补充：[IconPark](https://github.com/bytedance/IconPark)
+一条规则：**仓库根放"关于项目"的，`QtAdb/` 放"构成程序"的**。所以构建时源码目录是 `QtAdb/`（`cmake -S QtAdb -B build`），打包材料在 `QtAdb/packaging/` 下。
 
-### 字体
+## 技术栈
 
-- [lxgw/LxgwWenKai-Lite](https://github.com/lxgw/LxgwWenKai-Lite)
+| 层 | 选择 |
+| --- | --- |
+| 界面 | Qt 6.11.2（Widgets），C++17 |
+| 构建 | CMake ≥ 3.21 或 qmake；Ninja 或 Make |
+| 打包 | rpmbuild（Fedora 44）；自包含 Qt 运行库 + Google 官方 Linux adb |
+| 验证 | AddressSanitizer / UndefinedBehaviorSanitizer + 静态检查脚本 + 桩程序驱动的运行场景（设施在仓库外） |
 
-### 代码
+## 已知限制
 
-- 原始项目：[LapplandSp/QtAdb](https://github.com/LapplandSP/QtAdb)（MIT，`Copyright (c) 2023 Github@LapplandSP`）
-- 本分支的修改同样以 **MIT** 发布；重构过程与验证记录见 [`docs/AI-REFACTOR-AUDIT.md`](docs/AI-REFACTOR-AUDIT.md)
+- **平台**：只在 **Fedora 44 + Wayland** 上验证过；其他发行版不保证可运行（glibc 较新）。
+- **Windows**：未构建、未运行。只验证了两份构建描述等价、代码不再依赖 Windows 专有头文件。
+- **qmake**：未实际构建，只做了与 CMake 的源文件列表与翻译列表一致性校验。
+- **回归矩阵**：验证设施（检查脚本与探针）位于仓库之外，**未随仓库发布**；文档里提到的 32 项矩阵需要该设施才能复现。
+- **adb 版本**：RPM 内置 Google 官方 adb 37.0.1。若系统里已有不同版本的 adb server 在运行，启动时可能触发 adb 重启该 server（本机安装已改为使用系统 adb 以避免这一点）。
+- **翻译**：英文翻译共 436 条词条，已译 345 条，其余 91 条回退显示中文原文。
+- **侧载 / Recovery**：上游标注为"暂未完全实现、为不稳定功能"，以 recovery 输出为准。
+- **无界面截图**：仓库内只有应用图标，没有界面截图。
+- **旧仓库无法更新**：旧账号已无法登录，旧仓库 `LapplandSp/QtAdb` 无法挂上"已迁移"说明，迁移信息只能写在本仓库。
 
----
+## 路线图
 
-## 🙋 反馈
+上游遗留计划（来自旧仓库）：
 
-- 请在本仓库提交 issue（功能建议、缺陷、重构意见都欢迎）。
-  若您有想要添加的可激活应用，请附上它的命令与文档/官网。
+- 跨平台、文件管理、集成 scrcpy
+- 命令：更改屏幕边距
+- 控制台：优化 err 处理
+
+本仓库待办：
+
+- 补齐英文翻译剩余 91 条词条
+- 为 Linux 发布提供 CI 构建产物
+- 决定验证设施是否随仓库发布（当前"32 项矩阵"无法被读者自证）
+
+## 项目文档
+
+重构摘要（本仓库相对上游 1.7 的变化，均为可复核的计数）：
+
+| 指标 | 上游 1.7 | 现在 |
+| --- | ---: | ---: |
+| `qDebug()` 调试输出 | 278 | 0 |
+| 注释掉的代码 | 474 | 0 |
+| 可翻译文案（`tr()`） | 0 | 213 |
+| 最大源文件 | `mainwindow.cpp` 911 行 | 714 行 |
+| 函数规模 | — | 342 个，中位数 5 行 |
+
+| 文档 | 内容 |
+| --- | --- |
+| [docs/AI-REFACTOR-AUDIT.md](docs/AI-REFACTOR-AUDIT.md) | 重构过程的逐轮记录（唯一真相）：做了什么、为什么、以及为什么不做什么 |
+| [AGENTS.md](AGENTS.md) | 维护者与 agent 的上手契约、硬性约束、已知边界 |
+| [QtAdb/packaging/README.md](QtAdb/packaging/README.md) | 打包方式、包内布局、必须随发布告知的边界 |
+
+## 贡献 / 反馈
+
+- 请在本仓库提交 issue（功能建议、缺陷、重构意见都欢迎）。若您有想要添加的可激活应用，请附上它的命令与文档/官网。
 - 旧仓库与其社群渠道属于**同一位作者**；由于旧账号无法登录，那里的内容不会再更新，请以本仓库为准。
 
-十分感谢你的建议！
+## 许可证
+
+[MIT](LICENSE)，原始版权归 `Github@LapplandSP`（同一作者的旧账号）；本仓库的修改同样以 MIT 发布。
+
+**第三方组件**：分发的 RPM 内含 Qt 6（LGPL-3.0-only）与 Google platform-tools 中的 adb（Apache-2.0），相应许可证文本随包安装在 `/usr/share/licenses/qtadb-reforged/` 下。
+
+**第三方资源**：图标来自 [RemixIcon](https://github.com/Remix-Design/RemixIcon) 与 [IconPark](https://github.com/bytedance/IconPark)；字体为 [LXGW WenKai Lite](https://github.com/lxgw/LxgwWenKai-Lite)。
